@@ -1,0 +1,14 @@
+numpy
+scipy
+matplotlib
+seaborn
+pandas
+tqdm
+torch==2.6.0+cu126
+jax
+jaxlib
+scikit-learn
+statsmodels
+matplotlib-venn
+umap-learn
+gym
