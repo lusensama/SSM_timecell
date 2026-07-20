@@ -8,11 +8,12 @@ import numpy as np
 import torch
 from tqdm import tqdm
 import matplotlib.pyplot as plt
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 from torch.distributions import Categorical
 import pandas as pd
 from envs.lap_counting import Laps_Counting
 from agents.model_ssm_RL_laps import *
-from basic_lap_state import sort_sub, draw_heatmap
+from basic_lap_state import sort_sub
 import seaborn as sns
 
 
@@ -48,12 +49,12 @@ def get_param_linear(epoch: int, start: float = 1.0, end: float = 0.1, total_epo
         return end
     frac = (epoch - 1) / (total_epochs - 1)
     return start + (end - start) * frac
-    
+
 def plot_lap_choices(net, env, n_total_episodes=1000, spike=False, layer2=False, save_path='./figures'):
     net.eval()
     device = torch.device("cuda:0")
     all_laps = np.zeros([n_total_episodes, env.base_lap_count*env.lap_len+50])
-    
+
     for i_episode in tqdm(range(n_total_episodes)):
         done = False
         observation = env.reset()
@@ -117,7 +118,7 @@ def plot_lap_choices(net, env, n_total_episodes=1000, spike=False, layer2=False,
     plt.title(f"Average Predicted Count Over {env.base_lap_count} Laps")
     plt.grid(True)
     plt.tight_layout()
-    save_path=os.path.join(save_path, f"figure_3c_{env.base_lap_count}_lap_choices.png")
+    save_path=os.path.join(save_path, f"figure_5c_{env.base_lap_count}_lap_choices.png")
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
     plt.savefig(save_path, dpi=300)
     print(f"Line successfully saved to {save_path}")
@@ -460,21 +461,10 @@ def evaluate_and_plot_model(
         spike=spike,
         layer2=layer2,
     )
-
+    np.save(os.path.join(save_dir, f'./lap_counting_{seed}_activity.npy'),full_resp1)
     # Generate hidden state plots
     print("Generating hidden state plots...")
     plot_sorted_laps(full_resp1, save_dir=save_dir, lap_length=lap_length, lap_count=lap_count)
-
-    # Generate lap choice plots
-    print("Generating lap choice plots...")
-    plot_lap_choices(
-        net,
-        eval_env,
-        n_total_episodes=min(500, n_eval_episodes),
-        spike=spike,
-        layer2=layer2,
-        save_path=save_dir
-    )
 
     print(f"All plots saved to: {save_dir}")
     print("Evaluation complete!")
@@ -512,7 +502,7 @@ def eval_accuracy_and_vp_laps(net, env, device, n_episodes: int):
     vps = []
     last_pred = []
     last_gt = []
-    for i_episode in range(n_episodes):
+    for i_episode in tqdm(range(n_episodes)):
         done = False
         observation = env.reset()
         if hasattr(net, 'reinit_hid'):
@@ -540,6 +530,89 @@ def eval_accuracy_and_vp_laps(net, env, device, n_episodes: int):
     return acc, mean_vp, last_pred, last_gt
 
 
+def _split_units_by_change(data: np.ndarray, start_idx: int, end_idx: int, threshold: float):
+    """
+    Separate unit indices into high- and low-change groups within a time window.
+    """
+    end_idx = min(end_idx, data.shape[1])
+    if start_idx >= end_idx or end_idx - start_idx < 2:
+        all_indices = np.arange(data.shape[0]).tolist()
+        return [], all_indices
+
+    data_window = data[:, start_idx:end_idx]
+    abs_change = np.abs(np.diff(data_window, axis=1))
+    is_high = np.any(abs_change > threshold, axis=1)
+    indices = np.arange(data.shape[0])
+    high = indices[is_high].tolist()
+    low = indices[~is_high].tolist()
+    return high, low
+
+
+def _save_lap_heatmap(
+    matrix: np.ndarray,
+    lap_boundaries: list,
+    lap_labels: list,
+    title: str,
+    file_path: str,
+):
+    """
+    Save a heatmap with lap-specific x-axis labels.
+    """
+    fig, ax = plt.subplots(figsize=(20, 6))
+    cax = ax.imshow(matrix, aspect='auto', cmap='jet', interpolation='none')
+    divider = make_axes_locatable(ax)
+    cb_ax = divider.append_axes("right", size="2.5%", pad=0.5)
+    fig.colorbar(cax, cax=cb_ax, label='Normalized Activation')
+    for boundary in lap_boundaries[1:-1]:
+        ax.axvline(boundary, color='white', lw=1, linestyle='--')
+    midpoints = [
+        (lap_boundaries[i] + lap_boundaries[i + 1]) / 2
+        for i in range(len(lap_labels))
+    ]
+    ax.set_xticks(midpoints)
+    ax.set_xticklabels(lap_labels, rotation=0, fontsize=10, fontweight='bold')
+    ax.set_xlabel('Lap')
+    ax.set_ylabel('Unit # (Sorted by Peak Activity)')
+    ax.set_title(title)
+    plt.tight_layout(rect=[0, 0, 0.93, 1])
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    plt.savefig(file_path, dpi=300)
+    plt.close(fig)
+
+
+def _save_lap_panel(matrix: np.ndarray, lap_boundaries: list, lap_labels: list, title: str, file_path: str):
+    """
+    Plot each lap slice in a single figure (subplots), removing all-NaN rows.
+    """
+    n_laps = len(lap_labels)
+    fig, axes = plt.subplots(1, n_laps, figsize=(4 * n_laps, 4), sharey=True)
+    if n_laps == 1:
+        axes = [axes]
+    cax = None
+    for i, ax in enumerate(axes):
+        start = lap_boundaries[i]
+        end = lap_boundaries[i + 1]
+        slice_mat = matrix[:, start:end]
+        # Drop units that have no data in this lap slice (all NaN across time).
+        row_mask = ~np.all(np.isnan(slice_mat), axis=1)
+        slice_mat = slice_mat[row_mask]
+        if slice_mat.size == 0:
+            ax.set_visible(False)
+            continue
+        slice_mat = np.nan_to_num(slice_mat, nan=0.0)
+        cax = ax.imshow(slice_mat, aspect='auto', cmap='jet', interpolation='none')
+        ax.set_title(lap_labels[i])
+        ax.set_xlabel('Time')
+        if i == 0:
+            ax.set_ylabel('Unit #')
+    fig.suptitle(title)
+    # No colorbar for panel plots to avoid overlap.
+    plt.tight_layout(rect=[0, 0, 0.98, 0.95])
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    plt.savefig(file_path, dpi=300)
+    plt.close(fig)
+
+
 def plot_sorted_laps(full_resp1: np.ndarray, save_dir: str, lap_length: int, lap_count: int):
     n_neurons = full_resp1.shape[2]
     for i_neuron in range(n_neurons):
@@ -554,27 +627,35 @@ def plot_sorted_laps(full_resp1: np.ndarray, save_dir: str, lap_length: int, lap
 
         full_resp1[:, :, i_neuron][np.isnan(full_resp1[:, :, i_neuron])] = 0
     # restrict to a reasonable window (e.g., drop trailing zeros if any)
-    sorted_real_matrix, sorted_mat_raw, unsorted_mat, unsorted_mat_raw = sort_sub(full_resp1, laps=lap_count)
-    # _,sorted_real_matrix,_=sort_resp(full_resp1.real, norm=True)
-    # boundaries for lap phases (roughly every lap_length)
-    boundaries = [k * lap_length for k in range(1, lap_count + 1)]
+    sorted_real_matrix, _, _, _ = sort_sub(full_resp1, laps=lap_count)
+
+    total_timesteps = sorted_real_matrix.shape[1]
+    if lap_count == 0:
+        raise ValueError("lap_count must be greater than zero.")
+    lap_segment = total_timesteps // lap_count
+    lap_boundaries = [i * lap_segment for i in range(lap_count + 1)]
+    lap_labels = [f"L{i + 1}" for i in range(lap_count)]
 
     os.makedirs(save_dir, exist_ok=True)
-    draw_heatmap(sorted_real_matrix, title="sorted Lap Hidden State", save_path=os.path.join(save_dir, "figure_4c_sorted.png"), boundaries=boundaries)
-    # draw_heatmap(sorted_mat_raw, title="sorted Lap raw Hidden State", save_path=os.path.join(save_dir, "sorted_raw.png"))
-    # draw_heatmap(unsorted_mat, title="unsorted Lap Hidden State", save_path=os.path.join(save_dir, "unsorted.png"))
-    # draw_heatmap(unsorted_mat_raw, title="unsorted Lap raw Hidden State", save_path=os.path.join(save_dir, "unsorted_raw.png"))
+    _save_lap_heatmap(
+        sorted_real_matrix,
+        lap_boundaries,
+        lap_labels,
+        title="Sorted Lap Hidden State",
+        file_path=os.path.join(save_dir, "figure_5c_sorted.png"),
+    )
+    return
 
 
 def main():
     parser = argparse.ArgumentParser(description="Train SSM (laps), evaluate model, and plot hidden states")
     parser.add_argument("--mode", type=str, choices=['train', 'eval'], default='eval',
                        help="Mode: 'train' for training or 'eval' for evaluation")
-    parser.add_argument("--model_path", type=str, default="lap_best_model.pt",
+    parser.add_argument("--model_path", type=str, default="../data/lap_best_model.pt",
                        help="Path to model for evaluation (default: best_laps.pt)")
     # Training parameters
     parser.add_argument("--n_total_episodes", type=int, default=10000)
-    parser.add_argument("--n_eval_episodes", type=int, default=100)
+    parser.add_argument("--n_eval_episodes", type=int, default=5000)
     parser.add_argument("--n_neurons", type=int, default=80)
     parser.add_argument("--lr", type=float, default=3e-3)
     parser.add_argument("--weight_decay", type=float, default=1e-6)
@@ -679,16 +760,7 @@ def main():
         layer2=args.layer2,
     )
     plot_sorted_laps(full_resp1, save_dir=save_dir, lap_length=args.lap_length, lap_count=args.lap_count)
-    test_env = Laps_Counting(
-        final_rwd=10,
-        seed=args.seed,
-        lap_length=args.lap_length,
-        fixed_laps=args.lap_count,
-        approx=args.approx,
-        jitter=1.5,
-        randomize_laps=False,
-    )
-    plot_lap_choices(net, test_env, n_total_episodes=1000, spike=False, layer2=False, save_path='./figures')
+    # Skip additional plots to keep only figure_5c_sorted.png
 
 
 if __name__ == "__main__":

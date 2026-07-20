@@ -21,14 +21,24 @@ from matplotlib.collections import LineCollection
 from matplotlib.colors import Normalize
 
 # --- 1. Configuration ---
-FILE_PATH = './datapoints/L1_delay30_sorted.npz'
-# Specify the key within the .npz file that holds the data.
-DATA_KEY = 'delay1'
+# Keep using the "unsorted" data for both delay phases
+DATA_KEY = 'unsorted'
+# Provide file paths for delay1 and delay2 separately
+DELAY_CONFIG = [
+    {
+        "label": "delay1",
+        "file_path": "./figures/figure_3a2_L1_delay30_delay1_normalized_sorted_unsorted.npz",
+        "output_title": "Unit Activity Tuning Curves (Delay 1)",
+        "output_filename": "./figures/figure_2s_all_unit_tuning_curves_delay1.png",
+    },
+    {
+        "label": "delay2",
+        "file_path": "./figures/figure_3a2_L1_delay30_delay2_normalized_sorted_unsorted.npz",
+        "output_title": "Unit Activity Tuning Curves (Delay 2)",
+        "output_filename": "./figures/figure_2s_all_unit_tuning_curves_delay2.png",
+    },
+]
 # ------------------------------------
-
-# --- Output Parameters ---
-OUTPUT_FIGURE_TITLE = 'Unit Activity Tuning Curves (Delay 1)'
-OUTPUT_FIGURE_FILENAME = '../figures/figure_2c_all_unit_tuning_curves.png'
 
 
 def load_activation_data(file_path: str, data_key: str) -> np.ndarray:
@@ -127,12 +137,10 @@ def plot_tuning_curves_grid(data: np.ndarray, title: str, output_filename: str):
 
 def main():
     """Main execution function."""
-    
-    # 1. Load the data.
-    activation_data = load_activation_data(FILE_PATH, DATA_KEY)
-    
-    # 2. Generate and save the plot.
-    plot_tuning_curves_grid(activation_data, OUTPUT_FIGURE_TITLE, OUTPUT_FIGURE_FILENAME)
+    for cfg in DELAY_CONFIG:
+        print(f"\nProcessing {cfg['label']} using '{DATA_KEY}' key")
+        activation_data = load_activation_data(cfg["file_path"], DATA_KEY)
+        plot_tuning_curves_grid(activation_data, cfg["output_title"], cfg["output_filename"])
 
 
 if __name__ == "__main__":

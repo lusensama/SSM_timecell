@@ -2,8 +2,8 @@ import numpy as np
 from numpy import array
 import random
 import copy
+# from gymnasium import spaces
 from gym import spaces
-
 
 class IntervalDiscrimination(object):
     '''

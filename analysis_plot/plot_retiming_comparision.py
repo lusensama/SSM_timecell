@@ -20,8 +20,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 
-FILE_PATH_SHORT_DELAY = './datapoints/L1_delay30_sorted.npz'
-FILE_PATH_LONG_DELAY = './datapoints/L1_delay100_sorted.npz'
+FILE_PATH_SHORT_DELAY = '../../data/L1_delay30_sorted.npz'
+FILE_PATH_LONG_DELAY = '../../data/L1_delay100_sorted.npz'
 # ------------------------------------
 
 # --- Plotting and Analysis Parameters ---

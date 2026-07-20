@@ -5,7 +5,6 @@ Use intermediate choice task to train.
 
 import os
 import sys
-
 # Go two levels up to get to the project's root directory ('deeprl-timecells')
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -23,9 +22,123 @@ from tqdm import tqdm
 
 from envs.int_discrim import IntDiscrim3_Intermediate
 from agents.model_ssm_stack_RL import *
+# from agents.model_ssm_stack_RL_real import *
 from utils.utils_analysis import sort_resp
 from ssm_observer_1d import analyze_model_example
 
+
+def save_lambda_bar_from_model(model: torch.nn.Module, save_path: str, default_dt: float = 0.05) -> str:
+
+    def _ensure_lambda_bar(cell: torch.nn.Module) -> torch.Tensor:
+        lam = getattr(cell, 'lambda_bar', None)
+        if lam is not None:
+            return lam
+        dzoh = ddirac = dasync = None
+        try:
+            from agents.model_ssm_stack_RL import discretize_zoh as _dzoh, discretize_dirac as _ddirac, discretize_async as _dasync
+            dzoh, ddirac, dasync = _dzoh, _ddirac, _dasync
+        except Exception:
+            pass
+        if dzoh is None:
+            try:
+                from agents.model_ssm_RL_laps import discretize_zoh as _dzoh2, discretize_dirac as _ddirac2, discretize_async as _dasync2
+                dzoh, ddirac, dasync = _dzoh2, _ddirac2, _dasync2
+            except Exception:
+                pass
+        # Choose discretization function by name if available; default to zoh
+        fn_name = getattr(getattr(cell, 'discretize_fn', None), '__name__', None)
+        if fn_name == 'discretize_dirac' and ddirac is not None:
+            disc_fn = ddirac
+        elif fn_name == 'discretize_async' and dasync is not None:
+            disc_fn = dasync
+        else:
+            disc_fn = dzoh if dzoh is not None else None
+        if disc_fn is None:
+            raise RuntimeError("Discretization functions not available for computing lambda_bar.")
+        step = cell.step_rescale * torch.exp(cell.log_step)
+        lam_bar, _ = disc_fn(cell.Lambda_param, step, default_dt)
+        cell.lambda_bar = lam_bar
+        return lam_bar
+
+    out = {}
+    if hasattr(model, 'ssm_cell1'):
+        lam1 = _ensure_lambda_bar(model.ssm_cell1)
+        out['ssm_cell1_lambda_bar'] = lam1.detach().cpu()
+    if hasattr(model, 'ssm_cell2') and getattr(model, 'layer2', False):
+        lam2 = _ensure_lambda_bar(model.ssm_cell2)
+        out['ssm_cell2_lambda_bar'] = lam2.detach().cpu()
+
+    # Ensure directory exists
+    os.makedirs(os.path.dirname(os.path.abspath(save_path)), exist_ok=True)
+    torch.save(out, save_path)
+    return save_path
+
+def save_lambda_from_model(model: torch.nn.Module, save_path: str) -> str:
+    """
+    Save the raw (pre-discretization) Lambda parameters from the model's SSM cells.
+
+    The saved .pt file contains a dict with keys:
+      - 'ssm_cell1_lambda'
+      - 'ssm_cell2_lambda' (only if a second layer exists)
+    """
+    out = {}
+    if hasattr(model, 'ssm_cell1') and hasattr(model.ssm_cell1, 'Lambda_param'):
+        out['ssm_cell1_lambda'] = model.ssm_cell1.Lambda_param.detach().cpu()
+    if hasattr(model, 'ssm_cell2') and getattr(model, 'layer2', False) and hasattr(model.ssm_cell2, 'Lambda_param'):
+        out['ssm_cell2_lambda'] = model.ssm_cell2.Lambda_param.detach().cpu()
+    os.makedirs(os.path.dirname(os.path.abspath(save_path)), exist_ok=True)
+    torch.save(out, save_path)
+    return save_path
+
+def save_B_from_model(model: torch.nn.Module, save_path: str) -> str:
+    """
+    Save the input projection matrices B from the model's SSM cells.
+    """
+    out = {}
+    if hasattr(model, 'ssm_cell1') and hasattr(model.ssm_cell1, 'B'):
+        out['ssm_cell1_B'] = model.ssm_cell1.B.detach().cpu()
+    if hasattr(model, 'ssm_cell2') and getattr(model, 'layer2', False) and hasattr(model.ssm_cell2, 'B'):
+        out['ssm_cell2_B'] = model.ssm_cell2.B.detach().cpu()
+    os.makedirs(os.path.dirname(os.path.abspath(save_path)), exist_ok=True)
+    torch.save(out, save_path)
+    return save_path
+
+def save_C_tilde_from_model(model: torch.nn.Module, save_path: str) -> str:
+    """Save the C_tilde matrices from the model's SSM cells."""
+    out = {}
+    if hasattr(model, 'ssm_cell1') and hasattr(model.ssm_cell1, 'C_tilde'):
+        out['ssm_cell1_C_tilde'] = model.ssm_cell1.C_tilde.detach().cpu()
+    if hasattr(model, 'ssm_cell2') and getattr(model, 'layer2', False) and hasattr(model.ssm_cell2, 'C_tilde'):
+        out['ssm_cell2_C_tilde'] = model.ssm_cell2.C_tilde.detach().cpu()
+    os.makedirs(os.path.dirname(os.path.abspath(save_path)), exist_ok=True)
+    torch.save(out, save_path)
+    return save_path
+
+def freeze_ssm_params(net, layer2, freeze_lambda=False, freeze_B=False):
+    """Optionally freeze Lambda or B parameters in the SSM layers."""
+    if freeze_lambda:
+        if hasattr(net, 'ssm_cell1') and hasattr(net.ssm_cell1, 'Lambda_param'):
+            net.ssm_cell1.Lambda_param.requires_grad_(False)
+            print("Froze Lambda matrix (A) for first SSM layer.")
+        if layer2 and hasattr(net, 'ssm_cell2') and hasattr(net.ssm_cell2, 'Lambda_param'):
+            net.ssm_cell2.Lambda_param.requires_grad_(False)
+            print("Froze Lambda matrix (A) for second SSM layer.")
+    if freeze_B:
+        if hasattr(net, 'ssm_cell1') and hasattr(net.ssm_cell1, 'B'):
+            net.ssm_cell1.B.requires_grad_(False)
+            print("Froze input projection B for first SSM layer.")
+        if layer2 and hasattr(net, 'ssm_cell2') and hasattr(net.ssm_cell2, 'B'):
+            net.ssm_cell2.B.requires_grad_(False)
+            print("Froze input projection B for second SSM layer.")
+
+def build_freeze_suffix(freeze_lambda: bool, freeze_B: bool) -> str:
+    """Create filename suffixes to distinguish frozen-parameter runs."""
+    tags = []
+    if freeze_lambda:
+        tags.append("freezeLambda")
+    if freeze_B:
+        tags.append("freezeB")
+    return f"_{'_'.join(tags)}" if tags else ""
 
 def get_param_linear(epoch: int, start: float = 1.0, end: float = 0.1, total_epochs: int = 5000) -> float:
     if epoch <= 1:
@@ -50,6 +163,10 @@ def train_3stim(
     save_dir: str,
     eval_every: int,
     n_eval_episodes: int,
+    rand_init: bool,
+    resume_checkpoint: str | None,
+    freeze_lambda: bool,
+    freeze_B: bool,
 ):
     env = IntDiscrim3_Intermediate(seed=seed, delay=delay, fixed_delay=False)
 
@@ -60,6 +177,7 @@ def train_3stim(
         "dt_min": 0.001,
         "dt_max": 0.1,
         "conj_sym": True,
+        "rand_init": rand_init,
         "step_rescale": 1.0,
         "spike": spike,
         "layer2": layer2,
@@ -72,15 +190,37 @@ def train_3stim(
         ssm_params=ssm_params,
         p_dropout=0.1,
     ).to(device)
+    if resume_checkpoint:
+        if os.path.isfile(resume_checkpoint):
+            state = torch.load(resume_checkpoint, map_location=device)
+            net.load_state_dict(state)
+            print(f"Loaded checkpoint for continued training from {resume_checkpoint}")
+        else:
+            raise FileNotFoundError(f"Resume checkpoint not found: {resume_checkpoint}")
+    if freeze_lambda or freeze_B:
+        freeze_ssm_params(net, layer2, freeze_lambda=freeze_lambda, freeze_B=freeze_B)
+    file_suffix = build_freeze_suffix(freeze_lambda, freeze_B)
+    # Save initial model and spectral parameters for loaded model
+    try:
+        torch.save(net.state_dict(), os.path.join(save_dir, f'initial_rand_model_{seed}{file_suffix}.pt'))
+        save_lambda_from_model(net, os.path.join(save_dir, f'initial_lambda_{seed}{file_suffix}.pt'))
+        save_lambda_bar_from_model(net, os.path.join(save_dir, f'initial_lambda_bar_{seed}{file_suffix}.pt'))
+        save_B_from_model(net, os.path.join(save_dir, f'initial_B_{seed}{file_suffix}.pt'))
+        save_C_tilde_from_model(net, os.path.join(save_dir, f'initial_C_tilde_{seed}{file_suffix}.pt'))
+        # exit(0)
+    except Exception as e:
+        print(f"Warning: could not save initial model/lambda info from loaded model: {e}")
     net.reinit_hid()
     optimizer = torch.optim.Adam(net.parameters(), lr=lr, weight_decay=weight_decay)
+
+
 
     policy_hist, loss_hist, p_loss_hist, v_loss_hist = [], [], [], []
     correct_trial = np.zeros(n_total_episodes, dtype=np.int8)
 
     # best eval tracking
-    best_ckpt = os.path.join(save_dir, 'best_eval.pt')
-    best_acc_path = os.path.join(save_dir, 'best_eval_acc.txt')
+    best_ckpt = os.path.join(save_dir, f'best_eval_{seed}{file_suffix}.pt')
+    best_acc_path = os.path.join(save_dir, f'best_eval_acc_{seed}{file_suffix}.txt')
     best_eval_acc = -1.0
     if os.path.exists(best_acc_path):
         try:
@@ -174,6 +314,15 @@ def train_3stim(
                 with open(best_acc_path, 'w') as f:
                     f.write(f"{best_eval_acc:.6f}")
                 print(f"New best eval acc {best_eval_acc:.3f}% → saved {best_ckpt}")
+    # Save final model and spectral parameters after training
+    try:
+        torch.save(net.state_dict(), os.path.join(save_dir, f'final_model_{seed}{file_suffix}.pt'))
+        save_lambda_from_model(net, os.path.join(save_dir, f'final_lambda_{seed}{file_suffix}.pt'))
+        save_lambda_bar_from_model(net, os.path.join(save_dir, f'final_lambda_bar_{seed}{file_suffix}.pt'))
+        save_B_from_model(net, os.path.join(save_dir, f'final_B_{seed}{file_suffix}.pt'))
+        save_C_tilde_from_model(net, os.path.join(save_dir, f'final_C_tilde_{seed}{file_suffix}.pt'))
+    except Exception as e:
+        print(f"Warning: could not save final model/lambda info: {e}")
     return net, env
 
 
@@ -218,23 +367,43 @@ def eval_accuracy_3stim(
 
 def main():
     parser = argparse.ArgumentParser(description="Train SSM (3stim) and plot hidden states")
-    parser.add_argument("--n_total_episodes", type=int, default=200000)
+    parser.add_argument("--n_total_episodes", type=int, default=250000)
     parser.add_argument("--n_eval_episodes", type=int, default=100)
     parser.add_argument("--n_neurons", type=int, default=50)
     parser.add_argument("--lr", type=float, default=3e-4)
     parser.add_argument("--weight_decay", type=float, default=1e-6)
     parser.add_argument("--entropy", type=float, default=0.3)
+    parser.add_argument("--thr", type=float, default=0.4)
+    parser.add_argument("--fig_index", type=str, default="2b",
+                        help="Index string used in saved figure filenames (e.g., '2b').")
     parser.add_argument("--seed", type=int, default=72)
     parser.add_argument("--delay", type=int, default=30)
     parser.add_argument("--spike", action='store_true', default=False)
+    parser.add_argument("--init_method", type=str, choices=["hippo", "rand_complex"], default="hippo",
+                        help="Initialization method: 'hippo' (default), 'rand_complex', or 'rand_real'.")
     parser.add_argument("--layer2", action='store_true', default=False)
+    parser.add_argument("--partial", action='store_true', default=False)
     parser.add_argument("--save_dir", type=str, default="./training/3stim")
     parser.add_argument("--eval_every", type=int, default=100)
+    parser.add_argument("--freeze_lambda", action='store_true', default=False,
+                        help="Freeze Lambda (A) parameters during (re)training.")
+    parser.add_argument("--freeze_B", action='store_true', default=False,
+                        help="Freeze B projection matrices during (re)training.")
+    parser.add_argument("--resume_checkpoint", type=str, default=None,
+                        help="Path to a checkpoint to load before continuing training.")
     parser.add_argument("--load_model", action='store_true', default=False,
                         help="Load a pretrained checkpoint and plot without training.")
-    parser.add_argument("--model_path", type=str, default="3stim_best_model_spiking.pt",
+    parser.add_argument("--model_path", type=str, default="../data/3stim_best_model_spiking.pt",
                         help="Path to checkpoint to load when --load_best is set.")
+    parser.add_argument("--heatmap", action='store_true', default=False,
+                        help="Freeze B projection matrices during (re)training.")
     args = parser.parse_args()
+
+    from agents.model_ssm_stack_RL import AC_SSM_stack as _AC_SSM_stack, finish_trial as _finish_trial, SavedAction as _SavedAction
+    globals().update(AC_SSM_stack=_AC_SSM_stack, finish_trial=_finish_trial, SavedAction=_SavedAction)
+    # For rand_complex, pass rand_init=True; for hippo or rand_real, keep False
+    rand_init_flag = (args.init_method == "rand_complex")
+    run_suffix = build_freeze_suffix(args.freeze_lambda, args.freeze_B)
 
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
@@ -261,6 +430,7 @@ def main():
             "dt_min": 0.001,
             "dt_max": 0.1,
             "conj_sym": True,
+            "rand_init": rand_init_flag,
             "step_rescale": 1.0,
             "spike": args.spike,
             "layer2": args.layer2,
@@ -271,17 +441,26 @@ def main():
             batch_size=1,
             hidden_dim=args.n_neurons,
             ssm_params=ssm_params,
-            p_dropout=0.1,
+            p_dropout=0.1
         ).to(device)
+        if args.freeze_lambda or args.freeze_B:
+            freeze_ssm_params(net, args.layer2, freeze_lambda=args.freeze_lambda, freeze_B=args.freeze_B)
         net.reinit_hid()
+
+
         if os.path.isfile(args.model_path):
             state = torch.load(args.model_path, map_location=device)
             net.load_state_dict(state)
             net.eval()
             print(f"Loaded checkpoint from {args.model_path}")
+            if args.partial:
+                net.partial_reset3()
+                net.to(device)
+
         else:
             raise FileNotFoundError(f"Checkpoint not found: {args.model_path}")
     else:
+
         net, env = train_3stim(
             n_total_episodes=args.n_total_episodes,
             n_neurons=args.n_neurons,
@@ -296,7 +475,12 @@ def main():
             save_dir=save_dir,
             eval_every=args.eval_every,
             n_eval_episodes=args.n_eval_episodes,
+            rand_init=rand_init_flag,
+            resume_checkpoint=args.resume_checkpoint,
+            freeze_lambda=args.freeze_lambda,
+            freeze_B=args.freeze_B,
         )
+
 
     # Evaluate accuracy with parameters frozen (no updates)
     eval_acc = eval_accuracy_3stim(
@@ -309,8 +493,8 @@ def main():
     print(f"Evaluation accuracy over {args.n_eval_episodes} episodes: {eval_acc:.3f}%")
     # Save only if improved vs existing best (skip when loading checkpoint)
     if not args.load_model:
-        best_ckpt = os.path.join(save_dir, 'best_eval.pt')
-        best_acc_path = os.path.join(save_dir, 'best_eval_acc.txt')
+        best_ckpt = os.path.join(save_dir, f'best_eval_{args.seed}{run_suffix}.pt')
+        best_acc_path = os.path.join(save_dir, f'best_eval_acc_{args.seed}{run_suffix}.txt')
         prev_best = -1.0
         if os.path.exists(best_acc_path):
             try:
@@ -325,7 +509,17 @@ def main():
             print(f"Saved evaluated model to {best_ckpt}")
         else:
             print(f"No improvement over best eval acc ({prev_best:.3f}%). Keeping {best_ckpt}.")
-    analyze_model_example(model_path=args.model_path, n_neurons=args.n_neurons, delay=args.delay, fixed_delay=True, seed=args.seed)
+    if args.heatmap:
+        analyze_model_example(
+            model_path=args.model_path,
+            n_neurons=args.n_neurons,
+            delay=args.delay,
+            n_inferences=1000,
+            fixed_delay=True,
+            seed=args.seed,
+            thr=args.thr,
+            fig_index=args.fig_index,
+        )
 
 
 if __name__ == "__main__":

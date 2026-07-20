@@ -24,8 +24,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.stats import gaussian_kde
 
-FILE_PATH_DELAY_30 = './datapoints/lambda_30/seed_700_epi49999_lambda_bar.npy'
-FILE_PATH_DELAY_100 = './datapoints/lambda_100/seed_700_epi99998_lambda_bar.npy'
+FILE_PATH_DELAY_30 = '../../data/lambda_30/seed_700_epi49999_lambda_bar.npy'
+FILE_PATH_DELAY_100 = '../../data/lambda_100/seed_700_epi99998_lambda_bar.npy'
 
 DATA_KEY_EIGENVALUES = 'lambdas'
 OUTPUT_FIGURE_FILENAME = "../figures/figure_3c_angle_distribution.png"

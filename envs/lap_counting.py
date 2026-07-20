@@ -2,7 +2,7 @@ import numpy as np
 import random
 import copy
 from gym import spaces
-from typing import List,Iterable, Callable
+from typing import List,Iterable, Callable, Optional,Union
 import math
 
 def generate_lap_end_times(
@@ -10,9 +10,9 @@ def generate_lap_end_times(
         lap_length: int,
         *,                    # keyword-only from here on
         jitter: float = 1.0,  # σ of the Gaussian noise
-        seed: int | None = None,
+         seed: Optional[int] = None,
         as_int: bool = True
-) -> List[int | float]:
+) -> List[Union[int, float]]:
     """
     Return *exactly* `lap_count` timestamps—one drawn around each nominal
     lap end k × lap_length (k = 1 … lap_count).
@@ -59,7 +59,7 @@ def tanh_spike(scale: float = 1.0,
     return lambda d: pos_value if d == 0 else -math.tanh(d / scale)
 def timing_reward(
     current_step: int,
-    timings: list[int],
+    timings: List[int],
     gap_to_reward: Callable[[int], float],
 ) -> float:
     if not timings:

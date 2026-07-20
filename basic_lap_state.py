@@ -156,10 +156,10 @@ def sort_sub(resp, laps=4, t=30):
     sorted_mat_raw_segments = []
     unsorted_mat_segments = []
     unsorted_mat_raw_segments = []
-
+    from utils.utils_analysis import sort_freq_resp
     for i in range(laps):
         seg = resp[:, i*t:(i+1)*t, :]  # [b, t, c]
-        sorted_indices, sorted_real_matrix, _ = sort_resp(seg, norm=True)  # assumed to be numpy-based
+        sorted_indices, sorted_real_matrix, _ = sort_freq_resp(seg, norm=True)  # assumed to be numpy-based
 
         unsorted_mat_raw = reshape_resp(seg)  # [b*c, t] or similar depending on reshape_resp
 

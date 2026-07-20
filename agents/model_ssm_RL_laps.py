@@ -1,8 +1,9 @@
 """
-model_s5ssm.py
+model_sssm_RL_laps.py
 
 This module implements an SSM-based actor–critic network with HIPPO-based initialization,
-extended with utilities tailored for lap-counting experiments.
+extended with utilities tailored for lap-counting experiments. Too many testing functions were explored
+and this file became a bit cluttered, so it was separated from the generic `model_ssm_stack_RL.py`.
 It contains:
  - Discretization and HIPPO initialization utilities.
  - S5SSMCell: a single-step state-space model cell.

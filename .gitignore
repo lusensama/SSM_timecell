@@ -1,0 +1,25 @@
+# Whitelist approach: ignore everything, then allow only source/text/image files.
+*
+
+# Allow directory traversal so whitelisted files below can be found
+!*/
+
+# Source, scripts, docs, and figures
+!*.py
+!*.sh
+!*.txt
+!*.md
+!*.png
+!LICENSE
+!run
+!.gitignore
+
+# Explicitly exclude heavy / non-essential artifacts (redundant with the
+# whitelist above, but kept for clarity)
+*.pt
+*.npy
+*.npz
+*.pyc
+*.log
+__pycache__/
+.idea/
