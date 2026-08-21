@@ -2,17 +2,17 @@
 
 A stripped-down copy of the project: the two training entry points, the modules
 they import, the three plotting scripts, and the selected response figures.
-No experiment/sweep drivers, no Slurm launchers, no checkpoints, no run logs.
+No experiment/sweep drivers, no Slurm launchers, no run logs.
 All `#` comments have been removed from the Python sources; docstrings are kept.
 
 ```
 train_and_plot_3stim.py      3-stimulus interval discrimination (main training script)
-train_and_plot_laps.py       lap counting (train / eval + plots)
-basic_lap_state.py           lap-state helpers used by train_and_plot_laps.py
+train_landmark_laps.py       lap counting under randomised timing (redesigned task)
 ssm_observer_1d.py           delay-period analysis used by train_and_plot_3stim.py
 agents/                      SSM and LSTM actor-critic cores + HiPPO init
-envs/                        int_discrim.py, lap_counting.py
-utils/utils_analysis.py      unit sorting / decoding helpers
+envs/                        int_discrim.py, lap_random.py, lap_landmark.py
+utils/                       utils_analysis.py (sorting/decoding), vp.py (Victor-Purpura)
+models/                      the three released checkpoints -- see models/README.md
 analysis_plot/               three standalone analysis figures
 figures/response_selected/   the nine response-letter figures, their CSV/NPZ
                              inputs, and the code that rebuilds them
@@ -60,43 +60,58 @@ non-spiking path fails during evaluation (`eval_accuracy_3stim` unpacks four
 return values from a forward that returns three) — this is carried over from the
 full repo unchanged, not introduced here.
 
-Lap counting:
+Lap counting under randomised timing (the redesigned task -- lap count and lap
+length are both drawn fresh every episode):
 
 ```bash
-python train_and_plot_laps.py \
-  --mode train \
-  --n_total_episodes 10000 \
-  --n_eval_episodes 100 \
+python train_landmark_laps.py \
+  --mode train --env random --seed 2 \
+  --k_range 2 6 \
+  --lap_len_range 20 45 \
+  --n_total_episodes 20000 \
+  --eval_every 2000 --n_eval_episodes 300 \
   --n_neurons 80 \
   --lr 3e-3 --weight_decay 1e-6 --entropy 0.1 \
-  --lap_length 30 --lap_count 4 --eval_every 100
+  --select_on vp \
+  --save_dir ./training/lap_random
 ```
 
-Other flags: `--spike`, `--layer2`, `--approx`, `--vary_lap_len`,
-`--save_dir` (default `./training/lap_counting`).
+`--env landmark` runs the landmark-cued variant instead, and `--mode grid` its
+fixed-vs-varied lap-length conditions (landmark only). Checkpoints are selected
+on VP timing score by default; `--select_on acc` selects on count accuracy,
+which saturates and is the weaker criterion.
 
-Evaluation and plots from an existing checkpoint:
+This supersedes the earlier fixed-30-step lap task. The old
+`train_and_plot_laps.py` / `envs/lap_counting.py` pipeline is not carried here,
+and checkpoints from it are not interchangeable with this one -- the two
+environments give the same 2-D observation different meanings.
+
+### Released checkpoints
+
+`models/` carries the best model of each family, picked by re-evaluating every
+candidate on one common seed rather than trusting the accuracy recorded during
+training. `models/README.md` gives the numbers, the full candidate tables and
+the provenance path for each file.
 
 ```bash
-python train_and_plot_laps.py \
-  --mode eval --model_path <ckpt.pt> \
-  --n_eval_episodes 100 --n_neurons 80 \
-  --lap_length 30 --lap_count 4 --eval_save_dir ./figures/
+python train_and_plot_3stim.py --spike --delay 30 --n_neurons 50 \
+    --init_method hippo --load_model --model_path models/3stim_hippo_best.pt \
+    --n_eval_episodes 2000
 ```
-
-No `.pt` files ship with this copy, so `--mode eval` and `--load_model` need a
-checkpoint you trained or supplied yourself; the `--model_path` defaults still
-point at the `../data/` layout of the full repo.
 
 ### 3) Analysis figures
 
 Self-contained, no local imports; run from the repository root:
 
 ```bash
-python analysis_plot/svm_time_classification.py
 python analysis_plot/visualization_of_relative_change.py
 python analysis_plot/delay_time_analysis.py
 ```
+
+`analysis_plot/svm_time_classification.py` is also here but cannot run as
+shipped: it reads `lap_counting_<seed>_activity.npy`, which only the superseded
+`train_and_plot_laps.py` wrote. It needs either that activity file from an
+earlier run or a port to the redesigned task.
 
 ### 4) Response figures
 
