@@ -1,24 +1,3 @@
-"""
-model_sssm_RL_laps.py
-
-This module implements an SSM-based actor–critic network with HIPPO-based initialization,
-extended with utilities tailored for lap-counting experiments. Too many testing functions were explored
-and this file became a bit cluttered, so it was separated from the generic `model_ssm_stack_RL.py`.
-It contains:
- - Discretization and HIPPO initialization utilities.
- - S5SSMCell: a single-step state-space model cell.
- - AC_SSM: an actor–critic network that uses S5SSMCell as its recurrent core,
-           modified to stack two SSM cells.
-
-Differences vs `agents/model_ssm_stack_RL.py` (generic variant):
-- JAX interop: fetches HIPPO params via `agents.ssm_init` and explicitly uses `jax.device_get`.
-- Spiking mode: includes an LIF surrogate gradient (LIFSpike) with membrane state `mem` and `threshold`.
-- Training helper: provides `finish_run` with normalized returns and entropy weighting.
-- Probe utilities: includes `add_probe`, `forward_linear_probe`, and `finish_readout` for linear probes.
-- Device specifics: some tensors are created on `'cuda:0'` (may require adjustment on CPU-only setups).
-- Forward API: returns `(policy, value, lin_act)`; under spiking/layer2 may return extra intermediates.
-"""
-
 import math
 import torch
 import torch.nn as nn
