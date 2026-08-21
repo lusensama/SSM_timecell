@@ -1,0 +1,452 @@
+"""
+Helper functions for 3 stimulation task analysis
+"""
+
+import os
+import random
+import argparse
+import gc
+import textwrap
+from tqdm import tqdm
+import numpy as np
+import torch
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+from torch.distributions.categorical import Categorical
+from agents.model_ssm_stack_RL import AC_SSM_stack
+from envs.int_discrim import IntDiscrim3_Intermediate
+from utils.utils_analysis import sort_resp, sort_freq_resp
+
+def setup_directories(base_dir="plots"):
+    """Creates necessary directories for saving plots and returns the path."""
+    if not os.path.exists(base_dir):
+        os.makedirs(base_dir)
+    return base_dir
+
+def load_net_env(model_path: str, n_neurons: int, device: torch.device, delay: int, fixed_delay: bool):
+    """Initializes the network and environment, and loads a pre-trained model."""
+    has_layer2 = False
+    is_spiking = False
+    if model_path:
+        has_layer2 = '_2layer' in model_path
+        is_spiking = '_spiking' in model_path
+
+    env = IntDiscrim3_Intermediate(seed=0, delay=delay, fixed_delay=fixed_delay)
+
+    ssm_params = {
+        "P": n_neurons * 2,
+        "C_init": "trunc_standard_normal",
+        "discretization": "zoh",
+        "dt_min": 0.001,
+        "dt_max": 0.1,
+        "conj_sym": True,
+        "step_rescale": 1.0,
+        "spike": is_spiking,
+        "layer2": has_layer2
+    }
+    net = AC_SSM_stack(
+        input_dimensions=3,
+        action_dimensions=3,
+        hidden_dim=n_neurons,
+        ssm_params=ssm_params
+    ).to(device)
+
+    if model_path and os.path.isfile(model_path):
+        net.load_state_dict(torch.load(model_path, map_location=device))
+    net.eval()
+
+    print(f"Model loaded. Spiking: {net.spiking}, Layer 2: {net.layer2}")
+    print(f"Environment initialized with Delay: {delay}, Fixed Delay: {fixed_delay}")
+    return net, env
+
+def collect_hidden_states(net, env, n_inferences, n_neurons, stim_dur, delay_dur, device):
+    """
+	Runs inference and collects raw data: complex hidden states, spike logs, and trial outcomes.
+	"""
+    phase_info = {
+        'stim1': stim_dur, 'delay1': delay_dur, 'stim2': stim_dur,
+        'delay2': delay_dur, 'stim3': stim_dur
+    }
+    env_stage_map = {
+        'first_stim': 'stim1', 'delay': 'delay1', 'second_stim': 'stim2',
+        'second_delay': 'delay2', 'third_stim': 'stim3'
+    }
+
+    raw_data = {}
+    for phase_name, duration in phase_info.items():
+        raw_data[f"{phase_name}_resp1"] = np.zeros((n_inferences, duration, n_neurons), dtype=np.complex128)
+        if net.layer2:
+            raw_data[f"{phase_name}_resp2"] = np.zeros((n_inferences, duration, n_neurons), dtype=np.complex128)
+
+    spike_logs = {'layer1': [], 'layer2': []} if net.layer2 else {'layer1': []}
+    correct_trials_log = []
+    spiking_entries1, spiking_entries2 = [], []
+
+    for i in tqdm(range(n_inferences), desc="Running Inference"):
+        env.reset()
+        net.reinit_hid()
+        done = False
+        spiking_row1, spiking_row2 = [[] for _ in range(5)], [[] for _ in range(5)]
+        seg_idx = 0
+        ZERO = (0, 0, 0)
+        prev_zero = tuple(env.observation) == ZERO
+        while not done:
+            with torch.no_grad():
+                obs = torch.tensor(env.observation, dtype=torch.float32).unsqueeze(0).to(device)
+                outputs = net.forward(obs)
+                pol = outputs[0]
+
+            action = 1 if env.task_stage == 'init' else (
+                Categorical(pol).sample().item() if env.task_stage == 'choice_init' else 0)
+
+            if env.task_stage in env_stage_map and env.elapsed_t > 0:
+                phase_name, t_idx = env_stage_map[env.task_stage], env.elapsed_t - 1
+                if t_idx < raw_data[f"{phase_name}_resp1"].shape[1]:
+                    raw_data[f"{phase_name}_resp1"][i, t_idx,
+                    :] = net.hidden_state1.clone().detach().cpu().numpy().squeeze()
+                    if net.layer2:
+                        raw_data[f"{phase_name}_resp2"][i, t_idx,
+                        :] = net.hidden_state2.clone().detach().cpu().numpy().squeeze()
+
+                if net.spiking and len(outputs) > 3:
+                    spiking_row1[seg_idx].append(outputs[3].detach().cpu().numpy())
+                    if net.layer2 and len(outputs) > 4:
+                        spiking_row2[seg_idx].append(outputs[4].detach().cpu().numpy())
+                    current_zero = tuple(env.observation) == ZERO
+                    if current_zero != prev_zero:
+                        seg_idx += 1
+                        assert seg_idx < 5, f"too many segments: {seg_idx}"
+                    prev_zero = current_zero
+
+            _, _, done = env.step(action)
+
+        correct_trials_log.append(env.correct_trial)
+        if net.spiking:
+            spiking_entries1.append(spiking_row1)
+            if net.layer2: spiking_entries2.append(spiking_row2)
+
+    return raw_data, spiking_entries1, correct_trials_log
+
+def get_frequency_indices(data, start=0, end=200, thr=0.5):
+    """
+    Separates sample indices into high and low change lists based on a threshold.
+
+    A sample is considered "high change" if the absolute difference between any
+    two consecutive timesteps within the [start, end) window is greater than thr.
+
+    Args:
+        data (np.ndarray): The input array of shape (n_samples, n_timesteps).
+        start (int): The starting timestep index of the window to analyze.
+        end (int): The ending timestep index (exclusive) of the window.
+        thr (float): The threshold for absolute change to be considered significant.
+
+    Returns:
+        tuple[list, list]: A tuple containing two lists:
+                           - high_list: Indices of samples with high change.
+                           - low_list: Indices of samples with low change.
+    """
+    if end > data.shape[1]:
+        raise ValueError("The 'end' index is out of bounds for the data's timesteps.")
+
+    data_window = data[:, start:end]
+
+    abs_change = np.abs(np.diff(data_window, axis=1))
+
+    is_high_change = np.any(abs_change > thr, axis=1)
+
+    all_indices = np.arange(data.shape[0])
+    high_list = all_indices[is_high_change].tolist()
+    low_list = all_indices[~is_high_change].tolist()
+
+    assert set(high_list).isdisjoint(set(low_list)), "Assertion failed: Indices are not mutually exclusive."
+
+    return high_list, low_list
+
+def reshape_resp(total_resp):
+    mean_over_episodes = np.mean(total_resp, axis=0)
+    return mean_over_episodes.T
+
+def plot_sorted_activity(data, phases, layer, delay, normalized, save_path, cmap='jet',
+                         n_total_episodes=100, pre_sort=None, fixed_indices=None, thr=0.3,
+                         fig_index="2b"):
+    """
+	Builds and saves sorted/unsorted heatmaps.
+	"""
+    mats_complex = {}
+    mats_real = {}
+    for phase in phases:
+        key = f"{phase}_resp{layer}"
+        if key not in data:
+            continue
+
+        arr_complex = data[key].copy()
+        mats_complex[phase] = arr_complex
+
+        arr_real = arr_complex.real.copy()
+        arr_real[arr_real == 0] = np.nan
+        mats_real[phase] = arr_real
+
+    if not mats_real:
+        print(f"No data for layer {layer}. Skipping sorted plot.")
+        return
+
+    if normalized:
+        all_concat = np.concatenate([mats_real[p] for p in phases if p in mats_real],
+                                    axis=1)
+        mins, maxs = np.nanmin(all_concat, axis=(0, 1)), np.nanmax(all_concat, axis=(0, 1))
+        rng = (maxs - mins).clip(min=1e-6)
+        for p in phases:
+            if p in mats_real:
+                mats_real[p] = (mats_real[p] - mins) / rng
+                mats_real[p][np.isnan(mats_real[p])] = 0
+    else:
+        for p in phases:
+            if p in mats_real:
+                mats_real[p][np.isnan(mats_real[p])] = 0
+
+    unsorted_mats, sorted_mats, lengths, raw_mats = [], [], [], []
+    phase_order = []
+    for p in phases:
+        if p in mats_real:
+
+            _, sorted_phase, unsorted_phase = sort_freq_resp(mats_real[p], norm=normalized)
+            raw_mats.append(reshape_resp(np.abs(mats_complex[p])))
+            unsorted_mats.append(unsorted_phase)
+            if p == "delay1":
+                sorted_indices, sorted_phase, unsorted_phase = sort_freq_resp(mats_real[p], norm=normalized)
+                resp1 = sorted_phase
+            elif p == "delay2":
+                sorted_indices, sorted_phase, unsorted_phase = sort_freq_resp(mats_real[p], norm=normalized)
+                resp2 = sorted_phase
+
+            sorted_mats.append(sorted_phase)
+            lengths.append(sorted_phase.shape[1])
+            phase_order.append(p)
+
+    concat_unsorted = np.concatenate(unsorted_mats, axis=1)
+    concat_sorted = np.concatenate(sorted_mats, axis=1)
+    concat_raw_unsorted_resp = np.concatenate(raw_mats, axis=1)
+    boundaries = np.cumsum([0] + lengths)
+    phase_spans = {phase_order[i]: (boundaries[i], boundaries[i + 1]) for i in range(len(phase_order))}
+
+    change_windows = [
+        {"start": 54, "end": 70, "thr": thr},
+        {"start": 135, "end": 155, "thr": thr},
+    ]
+
+    total_cols = concat_sorted.shape[1] if concat_sorted.ndim == 2 else None
+
+    def draw_heatmap(mat, title, file_path,value_range=None, boundaries_override=None, labels_override=None, total_cols_override=None):
+        vmin, vmax = (value_range if value_range is not None else (None, None))
+        cols = mat.shape[1]
+        tot = total_cols_override if total_cols_override is not None else (total_cols or cols)
+        base_w, base_h = 20.0, 6.0
+        width = max(6.0, base_w * cols / max(tot, 1))
+        fig, ax = plt.subplots(figsize=(width, base_h))
+        cbar_label = 'Normalized Activation' if normalized else 'Activation'
+        cax = ax.imshow(mat, aspect='auto', cmap=cmap, interpolation='none',vmin=vmin,vmax=vmax)
+        fig.colorbar(cax, ax=ax, label=cbar_label)
+        bounds = boundaries if boundaries_override is None else boundaries_override
+        labels = phases if labels_override is None else labels_override
+        for x in bounds[1:-1]: ax.axvline(x, color='white', lw=1.5, linestyle='--')
+        ax.set_xticks([(st + en) / 2 for st, en in zip(bounds[:-1], bounds[1:])])
+        ax.set_xticklabels(labels, fontsize=12, fontweight='bold')
+        wrapped_title = "\n".join(textwrap.wrap(title, width=60))
+        ax.set_xlabel('Task Phase', labelpad=15, fontsize=12)
+        ax.set_ylabel('Unit # (Sorted by Peak Activity)', fontsize=12)
+        ax.set_title(title, fontsize=16)
+        plt.tight_layout()
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        plt.savefig(file_path)
+        plt.close(fig)
+
+    norm_str = "Normalized" if normalized else "Raw"
+    unsorted_title = f'Unsorted {norm_str} Activity (L{layer}, Delay {delay}, {n_total_episodes} eps)'
+    sorted_title = f'Sorted {norm_str} Activity (L{layer}, Delay {delay}, {n_total_episodes} eps)'
+
+    for idx, window in enumerate(change_windows):
+        start = window["start"]
+        end = window["end"]
+        thr = window.get("thr", 0.3)
+        high_freq_indices, low_freq_indices = get_frequency_indices(
+            concat_sorted, start=start, end=end, thr=thr
+        )
+        high_change_data = concat_sorted[high_freq_indices]
+        low_change_data = concat_sorted[low_freq_indices]
+        local_bounds = boundaries
+        local_labels = phases
+        target_phase = "delay1" if idx == 0 else ("delay2" if idx == 1 else None)
+        if target_phase and target_phase in phase_spans:
+            start_idx, end_idx = phase_spans[target_phase]
+            high_change_data = high_change_data[:, start_idx:end_idx]
+            low_change_data = low_change_data[:, start_idx:end_idx]
+            local_bounds = [0, end_idx - start_idx]
+            local_labels = [target_phase]
+
+        if low_change_data.shape[0] > 0:
+            low_change_title = (f'(thr<={thr} in [{start},{end}])\n'
+                                f'Sorted {norm_str} (L{layer}, Delay {delay}, {n_total_episodes} eps)')
+            low_change_filepath = os.path.join(
+                save_path,
+                f'figure_{fig_index}_L{layer}_delay{delay}_sorted_low_change_s{start}_e{end}_thr{thr}.png'
+            )
+
+    for phase_name in ["delay1", "delay2"]:
+        if phase_name in phase_spans:
+            start_idx, end_idx = phase_spans[phase_name]
+            phase_data = concat_sorted[:, start_idx:end_idx]
+            phase_unsorted = concat_unsorted[:, start_idx:end_idx]
+            npz_path = os.path.join(
+                save_path,
+                f'figure_{fig_index}_L{layer}_delay{delay}_{phase_name}_{norm_str.lower()}_sorted_unsorted.npz'
+            )
+            np.savez(npz_path, sorted=phase_data, unsorted=phase_unsorted)
+            print(f"Saved sorted/unsorted data for {phase_name} to {npz_path}")
+            phase_title = (f'{phase_name} only\n'
+                           f'Sorted {norm_str} Activity (L{layer}, Delay {delay}, {n_total_episodes} eps)')
+            phase_filepath = os.path.join(
+                save_path,
+                f'figure_{fig_index}_L{layer}_delay{delay}_sorted_{phase_name}_full.png'
+            )
+
+    if fixed_indices:
+        valid_indices = [idx for idx in fixed_indices if 0 <= idx < concat_sorted.shape[0]]
+        if valid_indices:
+            fixed_data = concat_sorted[valid_indices]
+            fixed_title = (f'Fixed-Index Units ({valid_indices}) - '
+                           f'Sorted {norm_str} Activity (L{layer}, Delay {delay}, {n_total_episodes} eps)')
+            fixed_filepath = os.path.join(
+                save_path,
+                f'figure_fixed_indices_L{layer}_delay{delay}_{"_".join(map(str, valid_indices))}.png'
+            )
+
+    draw_heatmap(concat_sorted, sorted_title,
+                 os.path.join(save_path, f'figure_{fig_index}_L{layer}_delay{delay}_sorted_{norm_str.lower()}.png'))
+
+    print(f"Saved sorted heatmaps for Layer {layer} to {os.path.join(save_path, f'figure_{fig_index}_L{layer}_delay{delay}_sorted_{norm_str.lower()}.png')}")
+    norm_str = "Normalized" if normalized else "Raw"
+
+    return sorted_indices
+
+def extract_lambda_bars(model_path: str, plot_dir: str, args, untrained: bool=False, n_models: int=5):
+    import glob
+    os.makedirs(plot_dir, exist_ok=True)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    model_paths = glob.glob(os.path.join(model_path, "*.pt"))
+
+    if untrained:
+        for i in range(n_models):
+            ssm_params = {
+                "P": args.n_neurons * 2,
+                "C_init": "trunc_standard_normal",
+                "discretization": "zoh",
+                "dt_min": 0.001,
+                "dt_max": 0.1,
+                "conj_sym": True,
+                "step_rescale": 1.0,
+                "spike": True,
+                "layer2": False
+            }
+            torch.manual_seed(i)
+            if torch.cuda.is_available():
+                torch.cuda.manual_seed(i)
+                torch.cuda.manual_seed_all(i)
+            np.random.seed(i)
+            random.seed(i)
+
+            net = AC_SSM_stack(
+                input_dimensions=3,
+                action_dimensions=3,
+                hidden_dim=args.n_neurons,
+                ssm_params=ssm_params
+            ).to(device)
+
+            lambda_bar = net.ssm_cell1.get_lambda_bar().detach().cpu().numpy()
+            out_path = os.path.join(plot_dir, f"{i}th_untrained_lambda_bar.npy")
+            np.save(out_path, lambda_bar)
+        exit(0)
+
+    if not model_paths:
+        raise FileNotFoundError(f"No .pt files found in {model_path}")
+
+    for model_path in model_paths:
+        net, _ = load_net_env(
+            model_path,
+            args.n_neurons,
+            device,
+            args.delay,
+            args.fixed_delay,
+        )
+
+        lambda_bar = net.ssm_cell1.get_lambda_bar().detach().cpu().numpy()
+
+        model_base = os.path.splitext(os.path.basename(model_path))[0]
+        out_path = os.path.join(plot_dir, f"{model_base}_lambda_bar.npy")
+
+        np.save(out_path, lambda_bar)
+    exit(0)
+
+def analyze_model_example(model_path, n_neurons, delay, fixed_delay, seed,
+                          n_inferences=1000, normalized=True, mode='plot',
+                          fixed_indices=None, thr=0.3, fig_index="2b"):
+    """
+    Run analysis and plotting for a single model file.
+    """
+    base_name = os.path.splitext(os.path.basename(model_path))[0]
+    plot_dir = setup_directories("./figures")
+    if not os.path.exists(plot_dir):
+        os.makedirs(plot_dir)
+
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    net, env = load_net_env(
+        model_path,
+        n_neurons,
+        device,
+        delay,
+        fixed_delay
+    )
+    stim_duration = 50
+
+    raw_data, spiking_log, correct_trials = collect_hidden_states(net, env, n_inferences, n_neurons,
+                                                        stim_duration, delay, device)
+
+    raw_data_dir = "raw_data_storage"
+    os.makedirs(raw_data_dir, exist_ok=True)
+    raw_data_path = os.path.join(raw_data_dir, f"{base_name}_raw_data_seed{seed}.npy")
+    np.save(raw_data_path, raw_data)
+    print(f"Saved raw data to {raw_data_path}")
+
+    if mode == 'plot':
+        phases = ['stim1', 'delay1', 'stim2', 'delay2', 'stim3']
+        num_layers = 2 if getattr(net, 'layer2', False) else 1
+
+        for layer in range(1, num_layers + 1):
+            print(f"\n--- Generating plots for Layer {layer} ({base_name}) ---")
+
+            sorting_indices = plot_sorted_activity(
+                data=raw_data,
+                phases=phases,
+                layer=layer,
+                delay=delay,
+                normalized=normalized,
+                save_path=plot_dir,
+                n_total_episodes=n_inferences,
+                fixed_indices=fixed_indices,
+                thr=thr,
+                fig_index=fig_index,
+            )
+            exit(0)
+    elif mode == 'lesion':
+        print("\n--- Lesion study functionality is implemented in a separate script. ---")
+
+    if correct_trials:
+        print(f"\n> Average accuracy over {n_inferences} inferences: {np.mean(correct_trials):.2%}")
+
+    gc.collect()
+    print("\nAnalysis complete for", base_name)
+

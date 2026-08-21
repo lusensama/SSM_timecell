@@ -1,0 +1,19 @@
+# Whitelist approach: ignore everything, then allow only source/text/image files.
+*
+!*/
+!*.py
+!*.txt
+!*.md
+!*.png
+!*.pdf
+!*.csv
+!*.npz
+!*.json
+!LICENSE
+!.gitignore
+*.pt
+*.npy
+*.pyc
+__pycache__/
+.idea/
+figures/response_selected/scripts/__pycache__/

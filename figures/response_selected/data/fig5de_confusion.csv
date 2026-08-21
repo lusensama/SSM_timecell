@@ -1,0 +1,17 @@
+kind,true_lap,predicted_lap,count,row_pct
+trained,1,1,25383,99.968493
+trained,1,2,8,0.031507
+trained,1,3,0,0.000000
+trained,1,4,0,0.000000
+trained,2,1,5,0.014228
+trained,2,2,34904,99.319921
+trained,2,3,234,0.665851
+trained,2,4,0,0.000000
+trained,3,1,0,0.000000
+trained,3,2,105,0.371130
+trained,3,3,27907,98.639191
+trained,3,4,280,0.989679
+trained,4,1,0,0.000000
+trained,4,2,0,0.000000
+trained,4,3,102,0.531139
+trained,4,4,19102,99.468861

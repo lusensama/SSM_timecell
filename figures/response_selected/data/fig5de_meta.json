@@ -1,0 +1,44 @@
+{
+  "lda": {
+    "axes": [
+      "LD1 (discriminant axis 1)",
+      "LD2 (discriminant axis 2)"
+    ],
+    "heldout_balanced_acc_pct": 98.17297979797979,
+    "chance_pct": 25.0,
+    "n_train": 2250,
+    "n_test": 2251
+  },
+  "pca": {
+    "axes": [
+      "PC1 (57.8% var)",
+      "PC2 (12.4% var)"
+    ],
+    "heldout_balanced_acc_pct": 25.0,
+    "chance_pct": 25.0,
+    "n_train": 2250,
+    "n_test": 2251
+  },
+  "kind": "trained",
+  "n_lap": 4,
+  "laps_present": [
+    1,
+    2,
+    3,
+    4
+  ],
+  "panel_e_t": 90,
+  "panel_e_seed": 2,
+  "confusion_balanced_acc_pct": 98.58157094954275,
+  "confusion_chance_pct": 39.516129032258064,
+  "confusion_n_states": 108030,
+  "confusion_timesteps_per_seed": 11,
+  "confusion_n_seed_timestep_decodes": 31,
+  "seeds": [
+    2,
+    3,
+    4
+  ],
+  "n_episodes": 5000,
+  "source": "figures/exp5_random/fig5de_n5000_trained"
+}
