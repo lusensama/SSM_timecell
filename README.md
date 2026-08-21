@@ -1,9 +1,4 @@
-## ssm_timecells — minimal
-
-A stripped-down copy of the project: the two training entry points, the modules
-they import, the three plotting scripts, and the selected response figures.
-No experiment/sweep drivers, no Slurm launchers, no run logs.
-All `#` comments have been removed from the Python sources; docstrings are kept.
+## ssm_timecells
 
 ```
 train_and_plot_3stim.py      3-stimulus interval discrimination (main training script)
@@ -15,7 +10,7 @@ envs/                        int_discrim.py, lap_random.py, lap_landmark.py
 utils/                       utils_analysis.py (sorting/decoding), vp.py (Victor-Purpura)
 models/                      the three released checkpoints -- see models/README.md
 analysis_plot/               three standalone analysis figures
-figures/response_selected/   the nine response-letter figures, their CSV/NPZ
+figures/response_selected/   the figures, their CSV/NPZ
                              inputs, and the code that rebuilds them
 ```
 
@@ -56,11 +51,6 @@ Other flags: `--layer2` (two SSM layers), `--init_method`, `--freeze_lambda`,
 `--freeze_B`, `--save_dir` (default `./training/3stim`), and
 `--load_model --model_path <ckpt.pt>` to skip training and only evaluate/plot.
 
-Note: `--spike` is the configuration this task was trained and reported in. The
-non-spiking path fails during evaluation (`eval_accuracy_3stim` unpacks four
-return values from a forward that returns three) — this is carried over from the
-full repo unchanged, not introduced here.
-
 Lap counting under randomised timing (the redesigned task -- lap count and lap
 length are both drawn fresh every episode):
 
@@ -78,10 +68,7 @@ python train_landmark_laps.py \
   --save_dir ./training/lap_random
 ```
 
-Those are the conditions the released checkpoint was trained under. `--env
-landmark` runs the landmark-cued variant instead, and `--mode grid` its
-fixed-vs-varied lap-length conditions (landmark only — it will refuse a
-`--env random` checkpoint). Checkpoints are selected on VP timing score by
+Checkpoints are selected on VP timing score by
 default; `--select_on acc` selects on count accuracy, which saturates and is the
 weaker criterion.
 
@@ -92,15 +79,6 @@ python eval_lap_counting.py --ckpt models/lap_counting_best.pt \
     --k_min 2 --k_max 16 --n_episodes 300
 ```
 
-Defaults reproduce the training distribution, so `K > 6` measures extrapolation
-to lap counts never seen. It prints count accuracy, VP timing score, hit/miss
-rates and false alarms per episode per K, and `--out results.json` writes the
-rows.
-
-This supersedes the earlier fixed-30-step lap task. The old
-`train_and_plot_laps.py` / `envs/lap_counting.py` pipeline is not carried here,
-and checkpoints from it are not interchangeable with this one -- the two
-environments give the same 2-D observation different meanings.
 
 ### Released checkpoints
 
@@ -129,10 +107,7 @@ shipped: it reads `lap_counting_<seed>_activity.npy`, which only the superseded
 `train_and_plot_laps.py` wrote. It needs either that activity file from an
 earlier run or a port to the redesigned task.
 
-### 4) Response figures
-
-`figures/response_selected/` needs neither checkpoints nor a run tree — the
-numbers behind every panel are the CSV/NPZ files in its `data/`:
+### 4) Figures
 
 ```bash
 cd figures/response_selected
