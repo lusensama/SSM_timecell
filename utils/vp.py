@@ -1,26 +1,3 @@
-"""
-Victor-Purpura spike-train distance, with the fixes from the Exp 5 audit.
-
-The DP in train_and_plot_laps.py / ssm_run_laps.py is a correct Victor-Purpura
-edit distance, but its *use* has three problems that matter once VP becomes the
-primary metric and the checkpoint-selection criterion:
-
-  1. q was passed inconsistently (q=1 in ssm_run_laps.py, q=0.1 in
-     train_and_plot_laps.py) and never recorded, so numbers from the two scripts
-     are not comparable. Here you pass a TOLERANCE in timesteps and q is derived
-     as q = 2/tol -- the shift/(delete+insert) breakeven is |dt| = 2/q, so `tol`
-     is exactly "how many steps of misalignment are still counted as the same
-     event". Always report tol.
-  2. Unsorted input silently returned a wrong answer. Now asserted.
-  3. Both lists empty gave 0/0 -> nan, which poisons np.mean over episodes.
-     Now returns 1.0 (two empty trains are identical).
-
-`hard_window=True` additionally forbids matching an event pair further apart than
-`tol`, which removes cross-landmark aliasing. Aliasing is only a problem with
-(near-)periodic landmarks; under varied lap lengths it is benign, so the default
-is False to stay numerically comparable with the existing logs.
-"""
-
 import numpy as np
 
 __all__ = ["q_from_tol", "vp_distance", "vp_score"]
