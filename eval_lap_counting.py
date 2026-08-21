@@ -1,23 +1,3 @@
-"""
-Evaluate a lap-counting checkpoint on envs/lap_random.py.
-
-Reports, per lap count K, the metrics the model was selected on: count accuracy
-(the episode's press count equals its true lap count), the Victor-Purpura timing
-score from utils/vp.py, hit and miss rates against the lap-end cues, and false
-alarms per episode.
-
-Metric definitions and the network construction follow the sweep that produced
-the released numbers, so results are directly comparable to them.
-
-    python eval_lap_counting.py --ckpt models/lap_counting_best.pt
-    python eval_lap_counting.py --ckpt models/lap_counting_best.pt \
-        --k_min 2 --k_max 16 --n_episodes 300
-
-The released model was trained on K = 2..6 with lap lengths drawn from 10..60
-and 0..2 mid-lap pauses of 0..25 steps; the defaults here reproduce exactly
-those conditions, so K above 6 measures extrapolation to unseen lap counts.
-"""
-
 import argparse
 import json
 
