@@ -11,9 +11,6 @@ conda activate ebt
 python scripts/make_all.py            # ~9 s, rebuilds all of it
 ```
 
-Verified: `data/` + `scripts/` were copied to an empty directory with the
-project absent and `make_all.py` reproduced every PNG.
-
 ## `scripts/`
 
 ```
