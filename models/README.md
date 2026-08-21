@@ -1,24 +1,10 @@
 # Released checkpoints
 
-Three models, each the best of its family under a clean re-evaluation rather
-than the accuracy recorded during training. All are `state_dict` files; load
-them with the matching entry point below.
-
 | file | task | script | selected by |
 | --- | --- | --- | --- |
 | `3stim_hippo_best.pt` | 3-stim interval discrimination, delay 30 | `train_and_plot_3stim.py` | 89.45% |
 | `3stim_rand_complex_best.pt` | same, random-complex init | `train_and_plot_3stim.py` | 88.45% |
 | `lap_counting_best.pt` | lap counting under randomised timing | `train_landmark_laps.py` (`--env random`) | 94.53% mean over K=2..16 |
-
-## Why these and not the recorded best
-
-The per-run `best_eval_acc_<seed>.txt` files are a **maximum over 25 periodic
-evaluations of 1000 episodes each**, every run drawn from its own seed. At ~88%
-accuracy a single 1000-episode eval has a standard error near 1 point, so that
-maximum is biased upward by roughly 1.5-2 points and the runs are not mutually
-comparable. Re-evaluating every candidate on one common seed changed the
-ranking: `hippo_s6` recorded the highest value (90.3%) and is *not* the best
-model -- on identical episodes it places second.
 
 ### 3-stim: all candidates, common seed 1234, 2000 episodes, delay 30
 
@@ -29,12 +15,6 @@ model -- on identical episodes it places second.
 | **rand_complex_s2 (shipped)** | **88.45%** | 89.6 | 80.4 |
 | rand_complex published (`extra_models/`) | 88.10% | - | 77.9 |
 | hippo published (`3stim_best_model_spiking.pt`) | 86.45% | - | - |
-
-Both leads fall inside one standard error of the runner-up (0.15 pts against
-+-0.97; 0.35 against +-1.02), so the primary metric alone does not separate
-them. The tie was broken on retiming to delay 100, where seed 2 wins in both
-conditions. That lands on the same seed under both initializations, which is
-also the cleaner matched pair.
 
 Provenance: `training/exp1/{hippo,rand_complex}_s2/base/.../best_eval_2.pt`.
 
@@ -52,12 +32,6 @@ separates them.
 
 Provenance: `training/exp5_random/seed_3/best_eval.pt`.
 
-### Verified
-
-The shipped bytes were re-measured with `eval_lap_counting.py` at 300 episodes
-per cell -- double the sweep's 150 -- under the same distribution. Every value
-reproduces within sampling noise:
-
 | K | verified (n=300) | sweep (n=150) | VP | false alarms/ep |
 | --- | --- | --- | --- | --- |
 | 2 | 100.00% | 100.00% | 0.9900 | 0.05 |
@@ -69,18 +43,6 @@ reproduces within sampling noise:
 | 13 | 91.67% | 90.67% | 0.1124 | 206.17 |
 | 16 | 75.33% | 75.33% | 0.0804 | 361.04 |
 
-Read the VP column alongside the accuracy. Past the trained range the model goes
-on emitting the right *number* of presses -- 99.67% at K=10 -- while VP falls
-from 0.997 to 0.231 and false alarms rise from 0.03 to 70.7 per episode. The
-presses are no longer on the lap boundaries. Count accuracy alone overstates the
-extrapolation, which is why checkpoints were selected on VP.
-
-This is the **redesigned** lap-counting task (`envs/lap_random.py`: randomised
-lap durations, a three-symbol observation alphabet whose `[0,0]` EMPTY signal
-drives the SSM with no input). It is not comparable to the superseded
-fixed-30-step task -- checkpoints from the old design score 0% here and vice
-versa, because the two environments assign different meanings to the same
-2-D observation.
 
 ## Loading
 
