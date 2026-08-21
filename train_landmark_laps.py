@@ -1,34 +1,3 @@
-"""
-Experiment 5 -- train the SSM agent under the landmark-driven reward and measure
-duration invariance.
-
-New script. Does not import or modify envs/lap_counting.py, train_and_plot_laps.py
-or ssm_run_laps.py.
-
-Two things differ from the existing pipeline besides the reward:
-
-  * CHECKPOINT SELECTION IS ON VP, NOT ACCURACY. With fixed_laps=4 and no count
-    randomization, predicted_lap_count is just the tally of emissions, so any
-    policy that emits exactly 4 times anywhere scores 100% count accuracy. Every
-    best_eval.pt produced by train_and_plot_laps.py (which selects on `acc`) was
-    therefore chosen by a criterion blind to whether emissions were
-    landmark-locked. `--select_on` defaults to vp here.
-
-  * The reported metrics are the hit/miss/false-alarm decomposition plus VP at an
-    explicit tolerance, plus the anticipation rate. Count accuracy is still
-    reported but flagged as degenerate.
-
-Usage
------
-  train:
-    python train_landmark_laps.py --mode train --save_dir training/exp5_landmark/seed_2 \
-        --seed 2 --n_total_episodes 60000 --eval_every 2000
-
-  duration-invariance grid on a checkpoint (the headline test):
-    python train_landmark_laps.py --mode grid --ckpt <path>/best_eval.pt \
-        --save_dir training/exp5_landmark/seed_2 --n_eval_episodes 2000
-"""
-
 import argparse
 import json
 import os
