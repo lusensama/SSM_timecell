@@ -6,17 +6,14 @@
 | `3stim_rand_complex_best.pt` | same, random-complex init | `train_and_plot_3stim.py` | 88.45% |
 | `lap_counting_best.pt` | lap counting under randomised timing | `train_landmark_laps.py` (`--env random`) | 94.53% mean over K=2..16 |
 
-### 3-stim: all candidates, common seed 1234, 2000 episodes, delay 30
+### 3-stim:
 
 | candidate | clean acc | recorded | retimed d100 |
 | --- | --- | --- | --- |
-| **hippo_s2 (shipped)** | **89.45%** | 89.0 | 82.3 |
-| hippo_s6 | 89.30% | 90.3 | 78.3 |
-| **rand_complex_s2 (shipped)** | **88.45%** | 89.6 | 80.4 |
-| rand_complex published (`extra_models/`) | 88.10% | - | 77.9 |
-| hippo published (`3stim_best_model_spiking.pt`) | 86.45% | - | - |
+| **hippo** | **89.45%** | 89.0 | 82.3 |
+| **rand_complex** | **88.45%** | 89.6 | 80.4 |
 
-### Lap counting: `exp5_random` seeds, from `lapcount_sweep.json`
+### Lap counting:
 
 Evaluated at K = 2..16 laps, 150 episodes per cell. All three seeds are perfect
 inside the trained range (K = 2..6), so extrapolation to unseen lap counts
