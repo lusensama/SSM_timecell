@@ -1,22 +1,3 @@
-"""
-model_s5ssm.py
-
-This module implements an SSM-based actor–critic network with HIPPO-based initialization.
-It contains:
- - Discretization and HIPPO initialization utilities.
- - S5SSMCell: a single-step state-space model cell.
- - AC_SSM: an actor–critic network that uses S5SSMCell as its recurrent core,
-           modified to stack two SSM cells.
-
-Differences vs `agents/model_ssm_RL_laps.py` (lap-specific variant):
-- Pure PyTorch: does not import or depend on JAX; uses `agents.ssm_init` directly.
-- Spiking mode: uses a simple surrogate gradient spike (SpikeSTE) without LIF membrane state.
-- Device handling: avoids hardcoded devices; internal tensors follow `self.device`.
-- Training helper: provides `finish_trial` (no return normalization); lacks `finish_run` alias.
-- No probe utilities: does not include `add_probe`, `forward_linear_probe`, or `finish_readout`.
-- Forward API: returns `(policy, value, lin_act)`; if spiking, may return extra intermediates for logging.
-"""
-
 import math
 import torch
 import torch.nn as nn
