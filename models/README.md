@@ -16,8 +16,6 @@
 | rand_complex published (`extra_models/`) | 88.10% | - | 77.9 |
 | hippo published (`3stim_best_model_spiking.pt`) | 86.45% | - | - |
 
-Provenance: `training/exp1/{hippo,rand_complex}_s2/base/.../best_eval_2.pt`.
-
 ### Lap counting: `exp5_random` seeds, from `lapcount_sweep.json`
 
 Evaluated at K = 2..16 laps, 150 episodes per cell. All three seeds are perfect
@@ -29,8 +27,6 @@ separates them.
 | **3 (shipped)** | 100.00% | **91.80%** | **94.53%** | 0.9952 |
 | 4 | 100.00% | 76.13% | 84.09% | 0.9990 |
 | 2 | 100.00% | 68.60% | 79.07% | 0.9996 |
-
-Provenance: `training/exp5_random/seed_3/best_eval.pt`.
 
 | K | verified (n=300) | sweep (n=150) | VP | false alarms/ep |
 | --- | --- | --- | --- | --- |
