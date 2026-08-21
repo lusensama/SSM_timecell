@@ -52,6 +52,29 @@ separates them.
 
 Provenance: `training/exp5_random/seed_3/best_eval.pt`.
 
+### Verified
+
+The shipped bytes were re-measured with `eval_lap_counting.py` at 300 episodes
+per cell -- double the sweep's 150 -- under the same distribution. Every value
+reproduces within sampling noise:
+
+| K | verified (n=300) | sweep (n=150) | VP | false alarms/ep |
+| --- | --- | --- | --- | --- |
+| 2 | 100.00% | 100.00% | 0.9900 | 0.05 |
+| 3 | 100.00% | 100.00% | 0.9957 | 0.03 |
+| 4 | 100.00% | 100.00% | 0.9959 | 0.04 |
+| 5 | 100.00% | 100.00% | 0.9974 | 0.03 |
+| 6 | 100.00% | 100.00% | 0.9974 | 0.03 |
+| 10 | 99.67% | 100.00% | 0.2306 | 70.68 |
+| 13 | 91.67% | 90.67% | 0.1124 | 206.17 |
+| 16 | 75.33% | 75.33% | 0.0804 | 361.04 |
+
+Read the VP column alongside the accuracy. Past the trained range the model goes
+on emitting the right *number* of presses -- 99.67% at K=10 -- while VP falls
+from 0.997 to 0.231 and false alarms rise from 0.03 to 70.7 per episode. The
+presses are no longer on the lap boundaries. Count accuracy alone overstates the
+extrapolation, which is why checkpoints were selected on VP.
+
 This is the **redesigned** lap-counting task (`envs/lap_random.py`: randomised
 lap durations, a three-symbol observation alphabet whose `[0,0]` EMPTY signal
 drives the SSM with no input). It is not comparable to the superseded
@@ -71,7 +94,13 @@ python train_and_plot_3stim.py --spike --delay 30 --n_neurons 50 \
 other. The init only builds the network before the checkpoint overwrites it, so
 it must match the architecture, not the weights.
 
-`lap_counting_best.pt` is an 80-unit `AC_SSM_stack` for `Laps_Random`. Note that
-`train_landmark_laps.py --mode grid` is defined for `--env landmark` only and
-will refuse this checkpoint; the script that evaluates it across lap counts is
-`eval_lapcount_sweep.py`, which is not carried in this repo.
+`lap_counting_best.pt` is an 80-unit `AC_SSM_stack` for `Laps_Random`:
+
+```bash
+python eval_lap_counting.py --ckpt models/lap_counting_best.pt \
+    --k_min 2 --k_max 16 --n_episodes 300
+```
+
+`eval_lap_counting.py` defaults to the training distribution, so `K > 6`
+measures extrapolation. Note that `train_landmark_laps.py --mode grid` is
+defined for `--env landmark` only and will refuse this checkpoint.

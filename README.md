@@ -8,6 +8,7 @@ All `#` comments have been removed from the Python sources; docstrings are kept.
 ```
 train_and_plot_3stim.py      3-stimulus interval discrimination (main training script)
 train_landmark_laps.py       lap counting under randomised timing (redesigned task)
+eval_lap_counting.py         evaluate a lap checkpoint across lap counts
 ssm_observer_1d.py           delay-period analysis used by train_and_plot_3stim.py
 agents/                      SSM and LSTM actor-critic cores + HiPPO init
 envs/                        int_discrim.py, lap_random.py, lap_landmark.py
@@ -67,7 +68,8 @@ length are both drawn fresh every episode):
 python train_landmark_laps.py \
   --mode train --env random --seed 2 \
   --k_range 2 6 \
-  --lap_len_range 20 45 \
+  --lap_len_range 10 60 \
+  --pause_count_range 0 2 --pause_len_range 0 25 \
   --n_total_episodes 20000 \
   --eval_every 2000 --n_eval_episodes 300 \
   --n_neurons 80 \
@@ -76,10 +78,24 @@ python train_landmark_laps.py \
   --save_dir ./training/lap_random
 ```
 
-`--env landmark` runs the landmark-cued variant instead, and `--mode grid` its
-fixed-vs-varied lap-length conditions (landmark only). Checkpoints are selected
-on VP timing score by default; `--select_on acc` selects on count accuracy,
-which saturates and is the weaker criterion.
+Those are the conditions the released checkpoint was trained under. `--env
+landmark` runs the landmark-cued variant instead, and `--mode grid` its
+fixed-vs-varied lap-length conditions (landmark only — it will refuse a
+`--env random` checkpoint). Checkpoints are selected on VP timing score by
+default; `--select_on acc` selects on count accuracy, which saturates and is the
+weaker criterion.
+
+To evaluate a lap checkpoint across lap counts:
+
+```bash
+python eval_lap_counting.py --ckpt models/lap_counting_best.pt \
+    --k_min 2 --k_max 16 --n_episodes 300
+```
+
+Defaults reproduce the training distribution, so `K > 6` measures extrapolation
+to lap counts never seen. It prints count accuracy, VP timing score, hit/miss
+rates and false alarms per episode per K, and `--out results.json` writes the
+rows.
 
 This supersedes the earlier fixed-30-step lap task. The old
 `train_and_plot_laps.py` / `envs/lap_counting.py` pipeline is not carried here,
