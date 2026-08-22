@@ -10,8 +10,8 @@ The figures ship bare -- no figure title, subtitle, panel titles, provenance
 stamp or explanatory prose -- so a text layer can be added downstream.  The one
 exception, kept because it is the version already in use, is
 fig_R22_R24_retiming_annotated, which this driver builds by rerunning the same
-code with RESP_BARE=0.  Fig. 5d/5e are drawn by their original run's own code
-and carry their original titles.
+code with RESP_BARE=0.  Fig. 5d/5e and lapcount_performance are drawn by their
+original runs' own code and carry their original titles.
 
 To refresh ../data/ from the run tree instead, see scripts/provenance/.
 """
@@ -30,8 +30,12 @@ def main():
     print("\n=== 5d / 5e ===")
     importlib.import_module("plot_fig5de").main()
 
-    print("\n=== response-letter figures (bare) ===")
+    print("\n=== lapcount_performance ===")
+    importlib.import_module("plot_lapcount").main()
+
     S = importlib.import_module("style")
+    print("\n=== response-letter figures "
+          + ("(textless) ===" if S.NOTEXT else "(bare) ==="))
     S.apply()
     importlib.import_module("plot_baseline_hippo").main()
     importlib.import_module("plot_exp1").fig_heatmaps()
@@ -39,6 +43,12 @@ def main():
     importlib.import_module("plot_exp5").fig_lap_heatmap()
     importlib.import_module("plot_exp6").main()
     importlib.import_module("plot_fig3").main()
+
+    if S.NOTEXT:
+        print("\n--- fig_R22_R24_retiming_annotated skipped (RESP_NOTEXT=1); "
+              "build it with RESP_NOTEXT=0")
+        print(f"\n--- done in {time.time() - t0:.1f}s")
+        return
 
     print("\n=== fig_R22_R24_retiming, annotated ===")
     os.environ["RESP_BARE"] = "0"

@@ -48,7 +48,7 @@ C = {
     "red":     "#e34948",
 }
 
-SURFACE = "#fcfcfb"
+SURFACE = "#ffffff"
 INK = "#0b0b0b"
 INK_2 = "#52514e"
 INK_MUTED = "#8a8880"
@@ -89,6 +89,52 @@ DIV = LinearSegmentedColormap.from_list(
                 "#f3a3a2", "#e34948", "#8f1f1e"])
 
 BARE = os.environ.get("RESP_BARE", "1") != "0"
+
+NOTEXT = os.environ.get("RESP_NOTEXT", "1") != "0"
+BARE = BARE or NOTEXT
+
+DPI = int(os.environ.get("RESP_DPI", "600"))
+
+def strip_text(fig, keep_in_axes=False):
+    """Remove every Text artist from a finished figure.
+
+    keep_in_axes=True keeps the text drawn INSIDE the data area -- ax.text() and
+    annotate() -- and removes only the chrome around it: titles, axis labels, tick
+    labels, legends, figure text and the colorbar's own labels.  That is the
+    confusion matrix's case: its cell values are the figure, everything else
+    around them is a label a downstream text layer can replace.
+
+    Done at save time rather than at each call site: the eight plot scripts set
+    text through a dozen different APIs (set_title/set_xlabel/set_xticklabels/
+    text/annotate/legend/suptitle/fig.text/Colorbar.set_label), and a post-pass
+    over the artist tree catches all of them, including the ones inside helpers
+    like chance_line() and fan_labels() and the colorbar axes matplotlib creates
+    for itself.
+
+    Note that removing an annotate() removes its leader line with it, which is
+    what we want: a leader pointing at nothing is worse than no leader.
+    """
+    for ax in list(fig.axes):
+        for loc in ("left", "center", "right"):
+            ax.set_title("", loc=loc)
+        ax.set_xlabel("")
+        ax.set_ylabel("")
+        ax.tick_params(labelbottom=False, labeltop=False,
+                       labelleft=False, labelright=False)
+        for axis in (ax.xaxis, ax.yaxis):
+            axis.offsetText.set_visible(False)
+        if not keep_in_axes:
+            for t in list(ax.texts):
+                t.remove()
+        for tbl in list(getattr(ax, "tables", [])):
+            tbl.remove()
+        if ax.get_legend() is not None:
+            ax.get_legend().remove()
+    for leg in list(fig.legends):
+        leg.remove()
+    for t in list(fig.texts):
+        t.remove()
+    return fig
 
 def note(ax, x, y, s, **kw):
     """Explanatory prose inside a panel.  Suppressed in BARE mode."""
@@ -223,7 +269,9 @@ def save(fig, path, pdf=True):
         for ax in fig.axes:
             for loc in ("left", "center", "right"):
                 ax.set_title("", loc=loc)
-    fig.savefig(path, dpi=200, bbox_inches="tight")
+    if NOTEXT:
+        strip_text(fig)
+    fig.savefig(path, dpi=DPI, bbox_inches="tight")
     if pdf:
         fig.savefig(path.replace(".png", ".pdf"), bbox_inches="tight")
     plt.close(fig)

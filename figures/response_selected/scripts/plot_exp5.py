@@ -14,6 +14,10 @@ from common import DATA, fig_path
 
 S.apply()
 
+PANEL_LETTER = {"trained_s2__globalnorm": "a",
+                "trained_s2__perlapnorm": "b",
+                "untrained_s2__globalnorm": "c"}
+
 def fig_lap_heatmap():
     p = os.path.join(DATA, "exp5_heatmap_matrices.npz")
     if not os.path.isfile(p):
@@ -23,14 +27,9 @@ def fig_lap_heatmap():
     z = np.load(p)
     n_lap, n_phase = int(z["n_lap"]), int(z["n_phase"])
 
-    panels = [("trained_s2__globalnorm",
-               "trained — one sort_freq_resp order and one normalization across "
-               "all laps"),
-              ("trained_s2__perlapnorm",
+    panels = [("trained_s2__perlapnorm",
                "trained — sorted AND renormalized WITHIN each lap "
-               "(basic_lap_state.sort_sub's convention)"),
-              ("untrained_s2__globalnorm",
-               "untrained, identical architecture — same global order")]
+               "(basic_lap_state.sort_sub's convention)")]
     panels = [(k, t) for k, t in panels if k in z.files]
 
     fig, axes = plt.subplots(len(panels), 1, figsize=(11.0, 2.35 * len(panels)),
@@ -48,7 +47,8 @@ def fig_lap_heatmap():
         ax.set_yticks([0, M.shape[0] - 1])
         ax.set_yticklabels(["1", str(M.shape[0])], fontsize=7.5)
         ax.set_ylabel("unit", fontsize=8)
-        ax.set_title(f"{'abc'[i]}   {lab}", loc="left", fontsize=9)
+        ax.set_title(f"{PANEL_LETTER.get(key, 'abc'[i])}   {lab}",
+                     loc="left", fontsize=9)
         for sp in ax.spines.values():
             sp.set_visible(False)
     axes[-1][0].set_xlabel("lap phase (position within lap)", fontsize=8.5)
@@ -58,15 +58,14 @@ def fig_lap_heatmap():
     cb.ax.tick_params(labelsize=7)
 
     S.title(fig, "The sequential basis renormalises to each lap though durations vary six-fold",
-            "Lap duration is U{10..60} steps drawn independently per lap.  Sort "
-            "orders come from a HELD-OUT HALF of the episodes,\nso no panel can show "
-            "a diagonal that is an artifact of sorting the data being displayed.  "
-            "Lap identity is evidenced by the\ndecoding, not by the heatmap: the "
-            "manuscript convention in panel b divides the cross-lap gain differences "
-            "out.\nOrdering is the manuscript's sort_freq_resp (grouped by peak "
-            "count, then peak time) and the colormap is jet.  Panel a takes one "
-            "order for the\nwhole span; panel b is basic_lap_state.sort_sub's "
-            "convention, sorting and renormalizing each lap independently.")
+            "Lap duration is U{10..60} steps drawn independently per lap.  The sort "
+            "order comes from a HELD-OUT HALF of the episodes,\nso the diagonal "
+            "cannot be an artifact of sorting the data being displayed.  Lap "
+            "identity is evidenced by the decoding, not by\nthe heatmap: this "
+            "convention divides the cross-lap gain differences out.  Ordering is "
+            "the manuscript's sort_freq_resp (grouped by\npeak count, then peak "
+            "time), each lap sorted and renormalized independently "
+            "(basic_lap_state.sort_sub), and the colormap is jet.")
     S.stamp(fig, "R3.3  |  data/exp5_heatmap_matrices.npz (+ .csv) "
                  "+ exp5_lap_selectivity.csv", y=-0.03)
     S.save(fig, fig_path("fig_R33_lap_heatmap.png"))

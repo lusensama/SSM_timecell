@@ -27,6 +27,7 @@ from sklearn.svm import SVC
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import make_pipeline
 
+import style as S
 from common import DATA, fig_path, read_csv
 
 LAP_COLORS = ["#3b6ea5", "#d1793d", "#4f9d6a", "#a4508b", "#8a8a8a", "#c4413f"]
@@ -75,7 +76,7 @@ def panel_d(meta):
     fig.suptitle("Fig. 5d | Lap identity decoded at an exact timestep "
                  "(randomised lap durations)", fontsize=12)
     fig.tight_layout()
-    _save(fig, "fig5d_lap_confusion.png")
+    _save(fig, "fig5d_lap_confusion.png", keep_cells=True)
 
 def panel_e(meta, mode="lda"):
     pts = [r for r in read_csv("fig5de_projection.csv")
@@ -122,9 +123,11 @@ def panel_e(meta, mode="lda"):
     _save(fig, "fig5e_lap_discriminant.png" if mode == "lda"
                 else "fig5e_lap_pca_boundary.png")
 
-def _save(fig, name):
+def _save(fig, name, keep_cells=False):
     path = fig_path(name)
-    fig.savefig(path, dpi=300, bbox_inches="tight")
+    if S.NOTEXT:
+        S.strip_text(fig, keep_in_axes=keep_cells)
+    fig.savefig(path, dpi=S.DPI, bbox_inches="tight")
     fig.savefig(path.replace(".png", ".pdf"), bbox_inches="tight")
     plt.close(fig)
     print(f"  wrote {os.path.basename(path)}")
