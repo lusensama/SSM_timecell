@@ -1,10 +1,3 @@
-"""PLOT -- R2.1 / R3.1: delay-period cascade heatmaps.
-
-Trimmed from figures/response/scripts/plot_exp1.py: only the one figure this
-folder carries is kept, byte-for-byte.  Reads ONLY ../data/.
-
-  fig_R31_cascade_heatmaps.png  what "cascade" means, at init and after training
-"""
 import os
 import numpy as np
 import matplotlib.pyplot as plt
@@ -15,21 +8,6 @@ from common import MODE_ORDER, MODE_LABEL, DATA, fig_path
 S.apply()
 
 def fig_heatmaps():
-    """Delay-period heatmaps, in the manuscript's own convention.
-
-    Ordering is sort_freq_resp: units are grouped by frequency content (the
-    number of prominence-filtered peaks in the normalized profile) and ordered by
-    peak time within the pooled one-or-two-peak group.  That is what
-    ssm_observer_1d.py does for the paper's panels; analysis_plot/plot_exp1.py
-    used the plain argmax-time sort_resp, and data/exp1_heatmap_matrices.npz
-    carries that ordering too under the `__timesorted` keys.
-
-    Colormap is jet, which is what every other activity heatmap in the repo uses
-    (ssm_observer_1d.py, plot_lap_identity.py, plot_landmark_heatmaps.py,
-    train_and_plot_laps.py, basic_lap_state.py, lesion_study.py).
-    analysis_plot/plot_exp1.py's viridis was the lone exception and is not
-    followed, so this panel matches the LSTM and lap-counting heatmaps.
-    """
     z = np.load(os.path.join(DATA, "exp1_heatmap_matrices.npz"))
     phases = [("initial_d30", "at initialization (untrained)"),
               ("trained_d30", "after 250,000 episodes")]

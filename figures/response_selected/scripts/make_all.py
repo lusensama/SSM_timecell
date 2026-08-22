@@ -1,20 +1,3 @@
-"""Driver: rebuild every figure in this folder from ../data/ alone.
-
-No checkpoints, no training/ tree, no GPU.  numpy + matplotlib + scikit-learn
-(the last only to refit the 2-D decision regions of Fig. 5e from its saved
-points).
-
-  python make_all.py
-
-The figures ship bare -- no figure title, subtitle, panel titles, provenance
-stamp or explanatory prose -- so a text layer can be added downstream.  The one
-exception, kept because it is the version already in use, is
-fig_R22_R24_retiming_annotated, which this driver builds by rerunning the same
-code with RESP_BARE=0.  Fig. 5d/5e and lapcount_performance are drawn by their
-original runs' own code and carry their original titles.
-
-To refresh ../data/ from the run tree instead, see scripts/provenance/.
-"""
 import importlib
 import os
 import time

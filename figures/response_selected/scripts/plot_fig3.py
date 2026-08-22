@@ -1,21 +1,3 @@
-"""PLOT -- manuscript Figure 3b/3c, re-measured over 10 seeds.
-
-Reads ONLY figures/response/data/.
-
-  fig_R32_fig3_relative_change.png   Lambda, B and C stacked in three rows
-
-Lambda_bar is extracted and kept in the CSV but not plotted: it was never a
-panel of the submitted figure.
-
-Format follows analysis_plot/visualization_of_relative_change.py exactly:
-overlapping density histograms of the ELEMENTWISE relative change
-|dtheta| / |theta_init|, HiPPO in #d62728 and random in #1f77b4 at alpha 0.6
-with black hairline edges, 50 bins spanning the 1st-99th percentile of the
-pooled data and dashed vertical rules at the means.  The only change is n: the
-submitted figure used one run per condition (seeds 200 / 201), this pools all
-ten exp1 seeds.  No legend and no in-plot text -- both are added downstream; the
-numbers are in data/fig3_relative_change_stats.csv.
-"""
 import os
 import numpy as np
 import matplotlib.pyplot as plt
@@ -35,7 +17,6 @@ COND = [("hippo", "HiPPO", S.MODE_COLOR["hippo"]),
         ("rand_complex", "random", S.MODE_COLOR["rand_complex"])]
 
 def _hist(ax, z, param, symbol, title, stats):
-    """One panel, in visualization_of_relative_change.py's own format."""
     data = {}
     for mode, _lab, _col in COND:
         v = np.asarray(z[f"{param}__{mode}"], dtype=float)

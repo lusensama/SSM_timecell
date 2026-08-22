@@ -1,20 +1,3 @@
-"""PLOT -- Fig. 5d / 5e: lap identity under randomised lap timing.
-
-Redraws the two panels from ../data/ alone -- no checkpoints, no 6.7 GB rollout
-cache.  The drawing code is analysis_plot/plot_fig5de_lap_svm.py's panel_d() and
-panel_e() unchanged; only the inputs are swapped from live arrays to the CSVs
-that scripts/provenance/extract_fig5de.py boiled that run down to.
-
-  fig5d_lap_confusion.png     pooled 4x4 confusion, cross-validated, 108,030
-                              states over 3 seeds x 31 EXACT timesteps
-  fig5e_lap_discriminant.png  the state at one exact timestep on the decoder's
-                              own discriminant axes; basis and boundary fit on a
-                              train half, points are the held-out half
-
-Both are decoded at an exact absolute timestep, so every lap class shares the
-same elapsed time and the published panels' time confound is gone by
-construction.
-"""
 import json
 import os
 
@@ -33,7 +16,6 @@ from common import DATA, fig_path, read_csv
 LAP_COLORS = ["#3b6ea5", "#d1793d", "#4f9d6a", "#a4508b", "#8a8a8a", "#c4413f"]
 
 def clf():
-    """One-vs-one linear decoder; see plot_fig5de_lap_svm.clf for why not OvR."""
     return make_pipeline(StandardScaler(), SVC(kernel="linear", C=1.0))
 
 def _meta():

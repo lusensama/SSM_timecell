@@ -1,15 +1,3 @@
-"""PLOT -- R2.2 / R2.4: the systematic retiming grid, as ONE figure.
-
-Reads ONLY figures/response/data/.
-
-  fig_R22_R24_retiming.png   accuracy vs D_test in a 2 x 2 grid:
-      a  D_train = 30, zero-shot        b  D_train = 30, readout-only
-      c  D_train = 60, zero-shot        d  D_train = 60, readout-only
-
-The named-cell, asymmetry and 30->200 collapse panels this script used to draw
-are dropped; their numbers are still in data/exp3_named_cells.csv,
-exp3_asymmetry.csv and exp3_retime_cells.csv.
-"""
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -56,7 +44,6 @@ def _curves(ax, cells, base, dtr, phase, tag, show_chance=False):
     ax.set_title(f"{tag}   D_train = {dtr},  {short}", loc="left", fontsize=9)
 
 def fig_retiming():
-    """The four accuracy curves only, in a 2 x 2 grid."""
     cells = read_csv("exp3_retime_cells.csv")
     base = read_csv("exp3_retime_basemodel.csv")
 

@@ -1,10 +1,3 @@
-"""PLOT -- R3.3: the lap-phase sequential basis under randomised timing.
-
-Trimmed from figures/response/scripts/plot_exp5.py: only the one figure this
-folder carries is kept, byte-for-byte.  Reads ONLY ../data/.
-
-  fig_R33_lap_heatmap.png  the sequential basis renormalises to each lap
-"""
 import os
 import numpy as np
 import matplotlib.pyplot as plt

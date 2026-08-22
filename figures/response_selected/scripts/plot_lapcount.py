@@ -1,34 +1,3 @@
-"""PLOT -- lap-counting performance versus number of laps (exp5b agents).
-
-Both measures on ONE panel and ONE y-axis, not a twin axis. A twin y-axis would
-make the alignment of the two scales arbitrary and invent a relationship that is
-not in the data. Here no such trick is needed: count accuracy and VP are both
-normalised scores on [0, 1] where 1.0 means perfect, so scaling VP by 100 puts
-them on a genuinely shared "percent of maximum" axis -- the "index to a common
-base" resolution rather than a second scale.
-
-Mean over 3 seeds with s.d. error bars. Agents were trained on K ~ Uniform{2..6};
-that span is shaded. K = 7..16 is extrapolation.
-
-Palette: categorical slots 1-2 of the reference palette (#2a78d6, #eb6834),
-validated all-pairs in light mode -- CVD dE 24.7, normal-vision dE 33.6, both
-above 3:1 contrast, so no relief is required. Two series, so a legend is present
-and both are direct-labelled. Light mode only: print/manuscript target.
-
-s.d. over 3 seeds is coarse, and past K~12 the seeds diverge rather than scatter
-(at K=16: 10.0 / 75.3 / 17.3 %). Per-seed values are kept in the CSV.
-
-Drawing code is plot_lapcount_sweep.py's, unchanged; only the input is swapped
-from figures/exp5_random/lapcount_sweep.json to ../data/, and the table view is
-written into ../data/ instead of next to the figure.
-
-Under RESP_NOTEXT=1 (the folder default) the labels, legend, direct series
-labels, the two in-panel annotations, the title and the footnote are all stripped
-at save time, like every other figure here, and the panel is drawn on white at
-600 dpi.  The shaded span over K = 2..6 stays: it encodes the trained range, so it
-is a mark and not background.  RESP_NOTEXT=0 RESP_DPI=220 with SURFACE back at
-#fcfcfb reproduces the original run's figure byte-for-byte.
-"""
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")

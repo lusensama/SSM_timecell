@@ -1,16 +1,3 @@
-"""Shared helpers for the response-letter figure pipeline.
-
-Two layers live in this folder:
-
-  extract_*.py  read the ORIGINAL run artifacts under training/ and figures/
-                (jsonl, json, npz state caches, slurm logs) and write flat CSVs
-                into figures/response/data/.  These need the run tree.
-  plot_*.py     read ONLY figures/response/data/*.csv (+ the two heatmap npz
-                bundles that live there) and write PNG/PDF into
-                figures/response/.  These need no models and no training/ tree.
-
-Everything downstream of data/ is therefore reproducible from this folder alone.
-"""
 import os
 import csv
 import json
@@ -60,7 +47,6 @@ def fig_path(name):
     return os.path.join(RESP, name)
 
 def write_csv(name, header, rows):
-    """Write rows to data/<name> and echo the path."""
     p = data_path(name)
     with open(p, "w", newline="") as f:
         w = csv.writer(f)
@@ -71,7 +57,6 @@ def write_csv(name, header, rows):
     return p
 
 def read_csv(name):
-    """Read data/<name> as a list of dicts, numbers coerced to float."""
     p = os.path.join(DATA, name)
     out = []
     with open(p) as f:
@@ -102,7 +87,6 @@ def load_jsonl(path):
     return out
 
 def r(x, n=4):
-    """Round, tolerating None/NaN."""
     if x is None:
         return ""
     try:
@@ -114,11 +98,6 @@ def r(x, n=4):
     return round(fx, n)
 
 def _count_peaks(sig, prom_frac=0.6):
-    """Local maxima including endpoints, with a prominence floor.
-
-    Verbatim from utils.utils_analysis.sort_freq_resp's inner helper, called
-    there with prom_frac=0.6.
-    """
     if len(sig) == 1:
         return 1
     min_v, max_v = np.min(sig), np.max(sig)
@@ -134,21 +113,6 @@ def _count_peaks(sig, prom_frac=0.6):
     return peaks
 
 def sort_freq_resp(total_resp, norm=True):
-    """Verbatim reimplementation of utils.utils_analysis.sort_freq_resp.
-
-    THIS IS THE MANUSCRIPT'S HEATMAP ORDERING.  Units are grouped by frequency
-    content -- the number of prominence-filtered peaks in the trial-averaged,
-    per-unit normalized profile -- and then ordered by peak time WITHIN the
-    one-or-two-peak group (single-peaked time cells and their two-peak
-    neighbours are pooled into one group); units with three or more peaks keep
-    their original relative order after that block.  ssm_observer_1d.py, which
-    produced the paper's sorted-activity panels, calls this and not sort_resp.
-
-    Inlined for the same reason as sort_resp: utils_analysis imports sklearn,
-    whose build here is ABI-incompatible with the installed numpy.
-
-    Returns (cell_nums, sorted_matrix, normalized_matrix, sorted_peak_counts).
-    """
     np.seterr(divide="ignore", invalid="ignore")
     n_neurons = np.shape(total_resp)[2]
     segments = np.moveaxis(total_resp, 0, 1)

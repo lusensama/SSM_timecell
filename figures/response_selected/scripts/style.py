@@ -1,18 +1,3 @@
-"""Shared plotting style for the response-letter figures.
-
-Every colour here is lifted from the original repo -- see the block comment
-below for the file and line each one comes from.  Where the repo has no
-convention (the LSTM arm, the lap-counting trained/untrained pair) the dataviz
-categorical slots are used, chosen so the resulting set still clears the
-colourblind gates beside the repo colours:
-
-    tab:red + tab:blue                    all-pairs CVD dE 21.1, normal 31.7
-    + aqua (LSTM H=50)                    all-pairs CVD dE 11.4, normal 21.2
-    + yellow (LSTM H=32)                  all-pairs CVD dE  9.1, normal 21.2
-
-Aqua and yellow sit below 3:1 on the light surface, so every panel that uses
-them carries visible direct value labels (the relief rule).
-"""
 import os
 
 import matplotlib
@@ -96,24 +81,6 @@ BARE = BARE or NOTEXT
 DPI = int(os.environ.get("RESP_DPI", "600"))
 
 def strip_text(fig, keep_in_axes=False):
-    """Remove every Text artist from a finished figure.
-
-    keep_in_axes=True keeps the text drawn INSIDE the data area -- ax.text() and
-    annotate() -- and removes only the chrome around it: titles, axis labels, tick
-    labels, legends, figure text and the colorbar's own labels.  That is the
-    confusion matrix's case: its cell values are the figure, everything else
-    around them is a label a downstream text layer can replace.
-
-    Done at save time rather than at each call site: the eight plot scripts set
-    text through a dozen different APIs (set_title/set_xlabel/set_xticklabels/
-    text/annotate/legend/suptitle/fig.text/Colorbar.set_label), and a post-pass
-    over the artist tree catches all of them, including the ones inside helpers
-    like chance_line() and fan_labels() and the colorbar axes matplotlib creates
-    for itself.
-
-    Note that removing an annotate() removes its leader line with it, which is
-    what we want: a leader pointing at nothing is worse than no leader.
-    """
     for ax in list(fig.axes):
         for loc in ("left", "center", "right"):
             ax.set_title("", loc=loc)
@@ -137,13 +104,11 @@ def strip_text(fig, keep_in_axes=False):
     return fig
 
 def note(ax, x, y, s, **kw):
-    """Explanatory prose inside a panel.  Suppressed in BARE mode."""
     if BARE:
         return None
     return ax.text(x, y, s, **kw)
 
 def callout(ax, *args, **kw):
-    """An annotate() with a leader line, used for prose.  Suppressed in BARE."""
     if BARE:
         return None
     return ax.annotate(*args, **kw)
@@ -182,23 +147,15 @@ def apply():
     })
 
 def grid(ax, axis="y"):
-    """Hairline recessive grid, solid, behind the marks."""
     ax.grid(True, axis=axis, zorder=0)
     ax.set_axisbelow(True)
 
 def chance_line(ax, y, label="chance", color=INK_MUTED, x=0.995, ha="right"):
-    """A solid hairline reference rule, labelled in ink rather than in colour."""
     ax.axhline(y, color=color, lw=0.9, zorder=1)
     ax.text(x, y, f" {label} ", transform=ax.get_yaxis_transform(),
             ha=ha, va="bottom", fontsize=7, color=INK_2)
 
 def title(fig, main, sub=None):
-    """Title block placed ABOVE the figure canvas.  Suppressed in BARE mode.
-
-    Positions are computed in inches and converted to figure fractions, so the
-    block never lands on a panel title however tall the figure is; bbox_inches
-    ="tight" pulls it back into the saved image.
-    """
     if BARE:
         return
     h = fig.get_figheight()
@@ -212,11 +169,6 @@ def title(fig, main, sub=None):
                  fontsize=8.5, color=INK_2, linespacing=1.5)
 
 def stamp(fig, text, y=None):
-    """Provenance line: which response section and which CSV a panel came from.
-
-    Drawn below the canvas so it cannot collide with rotated tick labels; pass a
-    more negative `y` when the x labels are long.  Suppressed in BARE mode.
-    """
     if BARE:
         return
     if y is None:
@@ -225,17 +177,6 @@ def stamp(fig, text, y=None):
 
 def fan_labels(ax, points, x_anchor, side="right", min_gap_frac=0.052,
                fontsize=8, leader=True):
-    """Direct-label crowded scatter points without overlaps.
-
-    `points` is [(x, y, text, colour), ...].  `x_anchor` is an AXES FRACTION
-    (0..1), so the helper works on log axes as well as linear.  Labels are
-    stacked at that column in y order, pushed apart to at least `min_gap_frac` of
-    the y-range, and joined to their marker by a hairline leader.  This keeps
-    direct labelling -- so identity is never colour-alone -- where a naive offset
-    would pile six labels on top of each other.
-
-    Call it after the axis limits are final; the anchor is resolved against them.
-    """
     if not points:
         return
     inv = ax.transData.inverted()
@@ -280,7 +221,6 @@ def save(fig, path, pdf=True):
           + (f" (+ {os.path.basename(path).replace('.png', '.pdf')})" if pdf else ""))
 
 def pstar(p):
-    """Compact significance annotation."""
     if p is None or p != p:
         return ""
     if p < 0.001:

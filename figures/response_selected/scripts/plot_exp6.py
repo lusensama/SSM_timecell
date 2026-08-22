@@ -1,16 +1,3 @@
-"""PLOT -- R2.3: the LSTM under the freeze-and-retime protocol.
-
-Trimmed from figures/response/scripts/plot_exp6.py.  That script's
-fig_R23_lstm_retiming is a three-panel figure (curves | gain distributions |
-freeze verification); only the first panel is carried here, at a standalone
-size, and the drawing code for it is the original's byte-for-byte.  The other
-two panels and the four CSVs behind them stay in figures/response/.
-
-Reads ONLY ../data/.
-
-  fig_R23_lstm_retiming.png  the retraining curves: the LSTM stays flat under
-                             freeze-and-retime while both SSM arms climb
-"""
 import numpy as np
 import matplotlib.pyplot as plt
 
