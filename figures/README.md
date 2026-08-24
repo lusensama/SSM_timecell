@@ -25,7 +25,6 @@ scripts/
   plot_exp5.py           fig_R33_lap_heatmap
   plot_exp6.py           fig_R23_lstm_retiming
   plot_fig3.py           fig_R32_fig3_relative_change
-  provenance/            the extractors -- NEED the run tree, not to replot
 ```
 
 `plot_exp1.py`, `plot_exp5.py` and `plot_exp6.py` are trimmed copies of
