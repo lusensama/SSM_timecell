@@ -13,22 +13,6 @@ _CELL_CLASSES = {
 }
 
 class AC_RNN(nn.Module):
-    """
-    Actor-critic network with a recurrent (or feedforward) core.
-
-    Args:
-        input_dimensions (int): dimension of sensory input.
-        action_dimensions (int): number of possible actions.
-        hidden_dim (int): width of the recurrent core and of the readout layer.
-        hidden_type (str): one of 'lstm', 'gru', 'rnn', 'linear'. 'linear' is the
-            memoryless feedforward control from the reference repo.
-        batch_size (int): batch size (1 throughout this project).
-        p_dropout (float): dropout applied to the readout vector before the heads.
-        spike (bool): match AC_SSM_stack's RETURN ARITY. See module docstring.
-        layer2 (bool): stack a second recurrent cell, mirroring AC_SSM_stack.
-        rnn_spike (bool): actually apply the surrogate-gradient spike to the
-            recurrent cell output(s). Off by default.
-    """
 
     def __init__(self, input_dimensions, action_dimensions, hidden_dim,
                  hidden_type="lstm", batch_size=1, p_dropout=0.0,
@@ -98,7 +82,6 @@ class AC_RNN(nn.Module):
         return self.hx[i]
 
     def reinit_hid(self):
-        """Zero the recurrent state. Called at the start of every episode."""
         dev = next(self.parameters()).device
         self.hx = []
         self.cx = []
@@ -114,7 +97,6 @@ class AC_RNN(nn.Module):
                 )
 
     def _step_cell(self, cell, x, i, lesion_idx=None):
-        """Advance one cell by a timestep and update self.hx/self.cx in place."""
         if isinstance(cell, nn.Linear):
             return F.relu(cell(x))
 
@@ -137,10 +119,6 @@ class AC_RNN(nn.Module):
         return h_new
 
     def forward(self, x, dt=0.05, lesion_idx=None):
-        """
-        One timestep. `dt` is accepted for signature parity with AC_SSM_stack
-        and ignored -- a discrete RNN has no integration step.
-        """
         out1 = self._step_cell(self.cell1, x, 0, lesion_idx)
         if self.rnn_spike:
             out1 = self.ste(out1, self.alpha)
@@ -165,18 +143,6 @@ class AC_RNN(nn.Module):
         return policy, value, lin_act
 
 def freeze_rnn_params(net, layer2, freeze_lambda=False, freeze_B=False):
-    """
-    RNN analog of `freeze_ssm_params`, so the retiming/freeze protocol means the
-    same thing for both backbones.
-
-    Mapping onto the SSM's parameters:
-        freeze_lambda (A / Lambda: the internal dynamics) -> weight_hh, bias_hh
-        freeze_B      (input projection)                  -> weight_ih, bias_ih
-
-    What stays trainable is then `readout` + `actor` + `critic`, i.e. exactly the
-    "train the readout only" arm of the retiming experiment. Note there is no
-    log_step analog to freeze.
-    """
     cells = [("cell1", net.cell1)]
     if layer2 and getattr(net, "cell2", None) is not None:
         cells.append(("cell2", net.cell2))

@@ -3,22 +3,11 @@ import numpy as np
 __all__ = ["q_from_tol", "vp_distance", "vp_score"]
 
 def q_from_tol(tol):
-    """Shift cost per timestep such that the shift/del+ins breakeven is `tol`."""
     if tol <= 0:
         raise ValueError(f"tol must be positive, got {tol}")
     return 2.0 / float(tol)
 
 def vp_distance(pred, gt, q, hard_window=None):
-    """
-    Victor-Purpura distance between two sorted 1-D event-time arrays.
-
-    Cost model: delete = 1, insert = 1, shift = q * |dt|. Because the shift branch
-    competes against delete+insert, no single event ever costs more than 2.
-
-    hard_window: if not None, a shift of more than `hard_window` steps is
-        forbidden outright (forcing delete+insert) instead of merely being
-        expensive. Prevents an event from matching a neighbouring landmark.
-    """
     pred = np.asarray(pred, dtype=float)
     gt = np.asarray(gt, dtype=float)
     if pred.size > 1 and np.any(np.diff(pred) < 0):
@@ -44,12 +33,6 @@ def vp_distance(pred, gt, q, hard_window=None):
     return float(D[m, n])
 
 def vp_score(pred, gt, tol=3.0, hard_window=False):
-    """
-    Normalized VP alignment score in [0, 1]. 1.0 == identical trains.
-
-    tol: misalignment tolerance in timesteps (q = 2/tol).
-    hard_window: forbid matches further apart than `tol` (anti-aliasing).
-    """
     m, n = len(pred), len(gt)
     if m == 0 and n == 0:
         return 1.0

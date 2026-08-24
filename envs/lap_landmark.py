@@ -1,28 +1,8 @@
-
 import numpy as np
 from gym import spaces
 
 def landmark_reward(cue, action, win_open, win_hit,
                     hit_rwd=1.0, miss_cost=1.0, fa_cost=0.1):
-    """
-    Per-timestep reward. Deliberately has NO access to absolute time or to the
-    landmark schedule -- see the module docstring. Do not add such arguments.
-
-    Args:
-        cue:      1 if a landmark cue was just observed by the agent, else 0.
-                  (unused directly: a cue opens the window before this is called,
-                  so its effect is carried by win_open. Kept in the signature to
-                  make the "observation only" contract explicit.)
-        action:   1 if the agent emitted this timestep, else 0.
-        win_open: whether a response window is currently open.
-        win_hit:  whether that window has already been credited with a hit.
-
-    Returns:
-        (reward, outcome) where outcome is one of
-        'hit' | 'extra' | 'false_alarm' | 'none'.
-        The 'miss' outcome is emitted by the caller at window expiry, since it is
-        the absence of an action rather than an action.
-    """
     del cue
     if action != 1:
         return 0.0, 'none'
@@ -33,19 +13,6 @@ def landmark_reward(cue, action, win_open, win_hit,
     return -float(fa_cost), 'false_alarm'
 
 class Laps_Landmark(object):
-    """
-    Action space:
-        0 = DO_NOTHING
-        1 = EMIT (one pulse into the single-neuron lap counter)
-
-    Observation (2-D, same as Laps_Counting so the model needs no change):
-        [1, 0] = running
-        [0, 1] = landmark cue (one timestep)
-
-    Interface is a drop-in for Laps_Counting: reset() -> obs,
-    step2(action) -> (obs, reward, task_stage), and the attributes
-    predicted_lap_count / true_lap_count / elapsed_t / lap_ends / task_stage.
-    """
 
     def __init__(self,
                  seed=1,
@@ -60,15 +27,6 @@ class Laps_Landmark(object):
                  fa_cost=0.1,
                  term_rwd=2.0,
                  hold_extra=2):
-        """
-        vary_lap_len: draw each lap's duration independently from lap_len_range.
-            When False, every lap is exactly `lap_length` steps and no pauses are
-            inserted -- the old fixed-pacing regime, kept for the eval grid.
-        pause_range: extra plain-running dwell after a lap's landmark, delaying
-            the next lap. Only used when vary_lap_len is True.
-        hold_extra: dwell steps after the last window closes, so the final lap's
-            window can complete before the episode ends.
-        """
         self.rng = np.random.RandomState(seed)
         self.base_lap_count = fixed_laps
         self.vary_lap_len = vary_lap_len
@@ -93,7 +51,6 @@ class Laps_Landmark(object):
         self.reset()
 
     def _draw_schedule(self):
-        """Landmark times for one episode, plus per-lap metadata."""
         lap_ends, lap_starts, lap_durations = [], [], []
         start = 0
         lo, hi = self.lap_len_range
@@ -143,10 +100,6 @@ class Laps_Landmark(object):
         return self.observation
 
     def step2(self, action):
-        """
-        `action` is the response to the observation the agent currently holds,
-        i.e. to the cue state at self.elapsed_t.
-        """
         if self.task_stage == 'done':
             return self.observation, 0.0, self.task_stage
 
@@ -204,7 +157,6 @@ class Laps_Landmark(object):
         return [seed]
 
     def episode_summary(self):
-        """Per-episode behavioral record, consumed by the eval script."""
         return {
             "true_count": int(self.true_lap_count),
             "pred_count": int(self.predicted_lap_count),

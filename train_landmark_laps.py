@@ -68,7 +68,6 @@ def build_net(args, device):
     return net
 
 def entropy_at(episode, total, start, end):
-    """Linear anneal, matching get_param_linear's contract in the existing code."""
     if episode <= 1:
         return start
     if episode >= total:
@@ -76,14 +75,12 @@ def entropy_at(episode, total, start, end):
     return start + (end - start) * (episode - 1) / (total - 1)
 
 def signed_lead_lag(press_times, lap_ends):
-    """(press time - nearest landmark time) for each press. Negative = early."""
     if len(press_times) == 0 or len(lap_ends) == 0:
         return []
     ends = np.asarray(lap_ends, dtype=float)
     return [float(p - ends[np.argmin(np.abs(ends - p))]) for p in press_times]
 
 def anticipation_count(fa_times, lap_ends, lead):
-    """False alarms landing within `lead` steps BEFORE an upcoming landmark."""
     if len(fa_times) == 0:
         return 0
     ends = np.asarray(lap_ends, dtype=float)
@@ -97,7 +94,6 @@ def anticipation_count(fa_times, lap_ends, lead):
 @torch.no_grad()
 def evaluate(net, env, device, n_episodes, vp_tol, ant_lead, vp_hard_window=False,
              progress=False):
-    """Greedy-sampled rollouts; returns an aggregate metric dict."""
     net.eval()
     n_correct = 0
     hits = misses = fas = extras = cues = 0
@@ -258,11 +254,6 @@ GRID = [
 ]
 
 def run_grid(args, device):
-    """
-    Duration-invariance test. Train once, evaluate with no retraining across lap
-    length ranges -- including ranges never seen. Flat hit_rate / vp across all
-    five is the claim: the agent responds to landmarks, whenever they arrive.
-    """
     if args.env == "random":
         raise SystemExit(
             "--mode grid is defined for --env landmark only: its conditions are "

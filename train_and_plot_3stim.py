@@ -1,8 +1,3 @@
-"""
-Train and evaluate a spiking SSM actor-critic on a 3-stimulus interval discrimination task.
-Use intermediate choice task to train.
-"""
-
 import os
 import sys
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -68,13 +63,6 @@ def save_lambda_bar_from_model(model: torch.nn.Module, save_path: str, default_d
     return save_path
 
 def save_lambda_from_model(model: torch.nn.Module, save_path: str) -> str:
-    """
-    Save the raw (pre-discretization) Lambda parameters from the model's SSM cells.
-
-    The saved .pt file contains a dict with keys:
-      - 'ssm_cell1_lambda'
-      - 'ssm_cell2_lambda' (only if a second layer exists)
-    """
     out = {}
     if hasattr(model, 'ssm_cell1') and hasattr(model.ssm_cell1, 'Lambda_param'):
         out['ssm_cell1_lambda'] = model.ssm_cell1.Lambda_param.detach().cpu()
@@ -85,9 +73,6 @@ def save_lambda_from_model(model: torch.nn.Module, save_path: str) -> str:
     return save_path
 
 def save_B_from_model(model: torch.nn.Module, save_path: str) -> str:
-    """
-    Save the input projection matrices B from the model's SSM cells.
-    """
     out = {}
     if hasattr(model, 'ssm_cell1') and hasattr(model.ssm_cell1, 'B'):
         out['ssm_cell1_B'] = model.ssm_cell1.B.detach().cpu()
@@ -98,7 +83,6 @@ def save_B_from_model(model: torch.nn.Module, save_path: str) -> str:
     return save_path
 
 def save_C_tilde_from_model(model: torch.nn.Module, save_path: str) -> str:
-    """Save the C_tilde matrices from the model's SSM cells."""
     out = {}
     if hasattr(model, 'ssm_cell1') and hasattr(model.ssm_cell1, 'C_tilde'):
         out['ssm_cell1_C_tilde'] = model.ssm_cell1.C_tilde.detach().cpu()
@@ -109,7 +93,6 @@ def save_C_tilde_from_model(model: torch.nn.Module, save_path: str) -> str:
     return save_path
 
 def freeze_ssm_params(net, layer2, freeze_lambda=False, freeze_B=False):
-    """Optionally freeze Lambda or B parameters in the SSM layers."""
     if freeze_lambda:
         if hasattr(net, 'ssm_cell1') and hasattr(net.ssm_cell1, 'Lambda_param'):
             net.ssm_cell1.Lambda_param.requires_grad_(False)
@@ -128,19 +111,6 @@ def freeze_ssm_params(net, layer2, freeze_lambda=False, freeze_B=False):
 def build_net(hidden_type, n_neurons, spike, layer2, device,
               init_mode="hippo", perturb_eps=0.1, rand_init=False,
               rnn_spike=False, p_dropout=0.1):
-    """
-    Construct the actor-critic network for the requested backbone.
-
-    hidden_type='ssm' gives the manuscript's AC_SSM_stack; 'lstm'/'gru'/'rnn'/
-    'linear' give the recurrent backbone extracted from LiNC Lab's
-    deeprl-timecells (agents/model_lstm_RL.py), which is the architecture class
-    Reviewer #2 point 3 asks us to compare against. Both expose the same
-    forward/reinit_hid/actor/critic interface, so the training and eval loops
-    below are shared verbatim.
-
-    --init_method / --perturb_eps are SSM-only (they select an eigenvalue
-    initialization); they are ignored by the RNN backbones.
-    """
     if hidden_type == "ssm":
         ssm_params = {
             "P": n_neurons * 2,
@@ -179,8 +149,6 @@ def build_net(hidden_type, n_neurons, spike, layer2, device,
     ).to(device)
 
 def freeze_backbone_params(net, hidden_type, layer2, freeze_lambda=False, freeze_B=False):
-    """Dispatch to the freeze helper matching the backbone (see freeze_rnn_params
-    for how Lambda/B map onto an RNN's recurrent/input weights)."""
     if hidden_type == "ssm":
         freeze_ssm_params(net, layer2, freeze_lambda=freeze_lambda, freeze_B=freeze_B)
     else:
@@ -188,7 +156,6 @@ def freeze_backbone_params(net, hidden_type, layer2, freeze_lambda=False, freeze
         freeze_rnn_params(net, layer2, freeze_lambda=freeze_lambda, freeze_B=freeze_B)
 
 def build_freeze_suffix(freeze_lambda: bool, freeze_B: bool) -> str:
-    """Create filename suffixes to distinguish frozen-parameter runs."""
     tags = []
     if freeze_lambda:
         tags.append("freezeLambda")
@@ -461,8 +428,7 @@ def main():
                         help="Use a single fixed delay of --delay steps every episode. "
                              "Default (False) matches the env's historical behavior: "
                              "delay_set = range(10, delay, 10), which SAMPLES SHORTER "
-                             "delays and never actually tests the requested delay itself "
-                             "(see analysis_plot/reproduce_artifact.py).")
+                             "delays and never actually tests the requested delay itself.")
     args = parser.parse_args()
 
     from agents.model_ssm_stack_RL import AC_SSM_stack as _AC_SSM_stack, finish_trial as _finish_trial, SavedAction as _SavedAction

@@ -9,7 +9,6 @@ agents/                      SSM and LSTM actor-critic cores + HiPPO init
 envs/                        int_discrim.py, lap_random.py, lap_landmark.py
 utils/                       utils_analysis.py (sorting/decoding), vp.py (Victor-Purpura)
 models/                      the three released checkpoints -- see models/README.md
-analysis_plot/               three standalone analysis figures
 figures/response_selected/   the figures, their CSV/NPZ
                              inputs, and the code that rebuilds them
 ```
@@ -93,21 +92,7 @@ python train_and_plot_3stim.py --spike --delay 30 --n_neurons 50 \
     --n_eval_episodes 2000
 ```
 
-### 3) Analysis figures
-
-Self-contained, no local imports; run from the repository root:
-
-```bash
-python analysis_plot/visualization_of_relative_change.py
-python analysis_plot/delay_time_analysis.py
-```
-
-`analysis_plot/svm_time_classification.py` is also here but cannot run as
-shipped: it reads `lap_counting_<seed>_activity.npy`, which only the superseded
-`train_and_plot_laps.py` wrote. It needs either that activity file from an
-earlier run or a port to the redesigned task.
-
-### 4) Figures
+### 3) Figures
 
 ```bash
 cd figures/response_selected

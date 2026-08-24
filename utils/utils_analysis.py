@@ -11,25 +11,6 @@ import umap
 from statsmodels.formula.api import ols
 
 def sort_freq_resp(total_resp, norm=True):
-    """
-    Sort neural responses by frequency content (number of peaks detected via Fourier transform),
-    then by timing of maximum response within each frequency group.
-    
-    Steps:
-    1. Normalize the activity matrix
-    2. Use FFT to detect the number of peaks for each neuron
-    3. Group neurons by peak count and sort each group by max response timing
-    
-    Args:
-        total_resp: Response data with shape (episodes, timesteps, neurons)
-        norm: Whether to normalize (default True, always applied in this function)
-    
-    Returns:
-        cell_nums: Indices of cells in sorted order
-        sorted_matrix: Sorted and normalized response matrix
-        normalized_matrix: Normalized response matrix (unsorted)
-        peak_counts: Number of peaks detected for each neuron (in sorted order)
-    """
     np.seterr(divide='ignore', invalid='ignore')
     n_neurons = np.shape(total_resp)[2]
     segments = np.moveaxis(total_resp, 0, 1)
@@ -44,7 +25,6 @@ def sort_freq_resp(total_resp, norm=True):
     normalized_matrix = scaled * 2 - 1
     
     def _count_peaks(sig, prom_frac=0.2):
-        """Count local maxima including endpoints with a simple prominence filter."""
         if len(sig) == 1:
             return 1
         min_v, max_v = np.min(sig), np.max(sig)
@@ -87,11 +67,6 @@ def sort_freq_resp(total_resp, norm=True):
     return cell_nums, sorted_matrix, normalized_matrix
     
 def sort_resp(total_resp, norm=True):
-    """
-    Average the responses across episodes, normalize the activity according to the
-    maximum and minimum of each cell (optional), and sort cells by when their maximum response happens.
-    returns: cell_nums, sorted_matrix
-    """
     np.seterr(divide='ignore', invalid='ignore')
     n_neurons = np.shape(total_resp)[2]
     segments = np.moveaxis(total_resp, 0, 1)

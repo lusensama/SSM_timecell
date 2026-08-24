@@ -1,4 +1,3 @@
-
 import numpy as np
 from gym import spaces
 
@@ -7,19 +6,6 @@ from envs.lap_landmark import landmark_reward
 __all__ = ["Laps_Random"]
 
 class Laps_Random(object):
-    """
-    Action space:
-        0 = DO_NOTHING
-        1 = EMIT (one pulse into the lap counter)
-
-    Observation (2-D):
-        [1, 0] = running
-        [0, 1] = landmark (one timestep)
-        [0, 0] = paused / inter-lap dwell / padding -- the EMPTY signal, no drive
-
-    Drop-in for Laps_Landmark: reset() -> obs, step2(action) -> (obs, reward,
-    task_stage), plus predicted_lap_count / true_lap_count / elapsed_t / lap_ends.
-    """
 
     def __init__(self,
                  seed=1,
@@ -74,7 +60,6 @@ class Laps_Random(object):
     RUNNING, LANDMARK, EMPTY = 0, 1, 2
 
     def _build(self):
-        """Explicit per-timestep timeline. Padding is everything after the tail."""
         lo, hi = self.lap_len_range
         pc_lo, pc_hi = self.pause_count_range
         pl_lo, pl_hi = self.pause_len_range
@@ -204,7 +189,6 @@ class Laps_Random(object):
         return self.observation, reward, self.task_stage
 
     def lap_index_at(self, t):
-        """Lap this timestep belongs to, or -1 for padding / inter-lap dwell."""
         return int(self._lap_of[t])
 
     def is_pause_at(self, t):
@@ -214,15 +198,12 @@ class Laps_Random(object):
         return bool(self._lap_of[t] == -1 and not self._is_pause[t])
 
     def phase_dist_at(self, t):
-        """Position along the lap: running steps completed / lap duration."""
         k = int(self._lap_of[t])
         if k < 0:
             return float('nan')
         return float(self._run_done[t]) / float(self.lap_durations[k])
 
     def phase_time_at(self, t):
-        """Elapsed time within the lap / lap wall-clock span. Differs from
-        phase_dist whenever the lap contains a mid-lap pause."""
         k = int(self._lap_of[t])
         if k < 0:
             return float('nan')

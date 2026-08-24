@@ -11,7 +11,6 @@ from utils.vp import vp_score
 
 DEV = torch.device("cpu")
 
-
 def build_net(n_neurons, seed):
     torch.manual_seed(1234 + seed)
     np.random.seed(1234 + seed)
@@ -22,7 +21,6 @@ def build_net(n_neurons, seed):
     return AC_SSM_stack(input_dimensions=2, action_dimensions=2, batch_size=1,
                         hidden_dim=n_neurons, ssm_params=ssm_params,
                         p_dropout=0.1).to(DEV)
-
 
 @torch.no_grad()
 def evaluate_at_K(net, K, a, seed):
@@ -66,7 +64,6 @@ def evaluate_at_K(net, K, a, seed):
         "std_pred_count": float(np.std(preds)),
         "mean_episode_len": float(np.mean(lens)),
     }
-
 
 def main():
     p = argparse.ArgumentParser(description=__doc__,
@@ -125,7 +122,6 @@ def main():
         with open(a.out, "w") as f:
             json.dump({"ckpt": a.ckpt, "seed": a.seed, "rows": rows}, f, indent=2)
         print(f"\nwrote {a.out}")
-
 
 if __name__ == "__main__":
     main()

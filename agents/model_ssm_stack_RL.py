@@ -9,16 +9,6 @@ from agents import ssm_init
 SavedAction = namedtuple('SavedAction', ['log_prob', 'value', 'policy'])
 
 def discount_rwds(r, gamma):
-    """
-    Compute discounted rewards.
-
-    Args:
-        r (np.array): an array of rewards (one per time step).
-        gamma (float): discount factor (e.g., 0.99).
-
-    Returns:
-        np.array: array of discounted rewards.
-    """
     disc_rwds = np.zeros_like(r, dtype=float)
     running_add = 0.0
     for t in reversed(range(len(r))):
@@ -27,42 +17,12 @@ def discount_rwds(r, gamma):
     return disc_rwds
 
 def select_action(model, policy_, value_):
-    """
-    Samples an action from the given policy, saves the log probability and state value,
-    and returns the sampled action and additional info.
-
-    Args:
-        model: the actor–critic model which should contain an attribute 'saved_actions'.
-        policy_ (torch.Tensor): Tensor containing action probabilities.
-        value_ (torch.Tensor): Tensor containing the state value estimate.
-
-    Returns:
-        action (int): the sampled action (as a python integer).
-        policy_info: additional policy info (e.g., first element of the tensor for logging).
-        value_info: the state value (as a python float).
-    """
     a = Categorical(policy_)
     action = a.sample()
     model.saved_actions.append(SavedAction(a.log_prob(action), value_, policy_))
     return action.item(), policy_.data[0], value_.squeeze().item()
 
 def finish_trial(model, discount_factor, optimizer, scheduler=None,entropy_weight=0.5, **kwargs):
-    """
-    Computes the discounted rewards and loss for all saved actions in the trial,
-    performs backpropagation, and updates the model's parameters.
-
-    Args:
-        model: the actor–critic model; it should have attributes:
-                - rewards: list of collected rewards during the trial.
-                - saved_actions: list of SavedAction namedtuples.
-                - device: torch.device in which the model resides.
-        discount_factor (float): discount factor (gamma) to use.
-        optimizer: the optimizer for updating the model parameters.
-        scheduler (optional): learning rate scheduler.
-
-    Returns:
-        Tuple of (policy_loss, value_loss) as torch Tensors.
-    """
     returns_ = discount_rwds(np.asarray(model.rewards), gamma=discount_factor)
     saved_actions = model.saved_actions
 
@@ -100,15 +60,6 @@ def finish_trial(model, discount_factor, optimizer, scheduler=None,entropy_weigh
     return p_loss, v_loss, total_loss
 
 def discretize_zoh(Lambda, step_delta, time_delta):
-    """
-    Discretize a diagonal (complex) state matrix using the zero-order hold method.
-    Args:
-        Lambda: torch.complex tensor of shape (P,)
-        step_delta: torch tensor of shape (P,) (real)
-        time_delta: scalar float (integration timestep)
-    Returns:
-        Lambda_bar, gamma_bar – both torch.complex tensors of shape (P,)
-    """
     Identity = torch.ones(Lambda.shape, dtype=Lambda.dtype, device=Lambda.device)
     Delta = step_delta * time_delta
     Lambda_bar = torch.exp(Lambda * Delta)
@@ -116,44 +67,24 @@ def discretize_zoh(Lambda, step_delta, time_delta):
     return Lambda_bar, gamma_bar
 
 def discretize_dirac(Lambda, step_delta, time_delta):
-    """
-    Discretize with Dirac-delta input spikes.
-    """
     Delta = step_delta * time_delta
     Lambda_bar = torch.exp(Lambda * Delta)
     gamma_bar = torch.tensor(1.0, dtype=Lambda.dtype, device=Lambda.device)
     return Lambda_bar, gamma_bar
 
 def discretize_async(Lambda, step_delta, time_delta):
-    """
-    Discretize with asynchronous (Dirac-delta with normalization) method.
-    """
     Identity = torch.ones(Lambda.shape, dtype=Lambda.dtype, device=Lambda.device)
     Lambda_bar = torch.exp(Lambda * step_delta * time_delta)
     gamma_bar = (1.0 / Lambda) * (torch.exp(Lambda * step_delta) - Identity)
     return Lambda_bar, gamma_bar
 
 def make_HiPPO(N):
-    """
-    Create a HiPPO-LegS matrix.
-    Args:
-        N: int, state size.
-    Returns:
-        A: (N, N) HiPPO-LegS matrix (torch.float32)
-    """
     n = torch.arange(N, dtype=torch.float32)
     P_vec = torch.sqrt(1 + 2 * n)
     A = torch.tril(P_vec[:, None] * P_vec[None, :]) - torch.diag(n)
     return -A
 
 def make_NPLR_HiPPO(N):
-    """
-    Compute components needed for the NPLR representation of HiPPO-LegS.
-    Returns:
-        A: HiPPO matrix (N x N)
-        P_vec: (N,) low-rank vector
-        B: (N,) HiPPO input vector
-    """
     n = torch.arange(N, dtype=torch.float32)
     A = make_HiPPO(N)
     P_vec = torch.sqrt(n + 0.5)
@@ -161,16 +92,6 @@ def make_NPLR_HiPPO(N):
     return A, P_vec, B
 
 def make_DPLR_HiPPO(N):
-    """
-    Compute components for a DPLR representation of HiPPO-LegS.
-    We return the diagonal (eigenvalue) part along with additional factors.
-    Returns:
-        Lambda: (N,) complex eigenvalues.
-        P_transformed: transformed low-rank term.
-        B_transformed: (N,) complex, input projection vector.
-        V: eigenvector matrix.
-        B_orig: original B vector (complex).
-    """
     A, P_vec, B = make_NPLR_HiPPO(N)
     S = A + torch.outer(P_vec, P_vec)
     S_diag = torch.diag(S)
@@ -201,23 +122,6 @@ class SpikeSTE(torch.autograd.Function):
         return grad_output * surrogate_grad, (grad_output * sigma *(1-sigma) ).sum()
 
 class S5SSMCell(nn.Module):
-    """
-    A single-step state-space model cell using HIPPO initialization.
-    This cell implements:
-        new_state = Lambda_bar * state + gamma_bar * (B @ u)
-        output    = Re( C_tilde @ new_state ) [+ feedthrough]
-    The discretized matrices are computed on the fly.
-
-    Args:
-        H_in (int): input dimension.
-        H_out (int): output dimension.
-        P (int): full state dimension.
-        C_init (str): initialization method for C ("trunc_standard_normal" or "lecun_normal").
-        discretization (str): "zoh", "dirac", or "async".
-        dt_min, dt_max (float): range for the learnable time constants.
-        conj_sym (bool): if True, uses half the state (enforcing conjugate symmetry).
-        step_rescale (float): multiplier for learned time constants.
-    """
     def __init__(self, H_in, H_out, P,
                  C_init="trunc_standard_normal",
                  discretization="zoh",
@@ -280,18 +184,6 @@ class S5SSMCell(nn.Module):
             raise NotImplementedError(f"Discretization method {discretization} not implemented")
     @staticmethod
     def _init_lambda_B(lam_hippo, B_hippo, local_P, init_mode, eps, full_N=None):
-        """Produce (Lambda, B) tensors for the requested initialization mode.
-
-        All draws use the global torch RNG, which is seeded per run in
-        train_and_plot_3stim.main(), so modes are reproducible given the seed.
-        See experiment1_matched_init_controls.txt for the scientific intent.
-
-        full_N is the FULL state size (the constructor's P), which is NOT the same
-        as local_P: with conj_sym=True only local_P = P//2 complex modes are stored,
-        one per conjugate pair. Only s4d_inv needs it, because S4D's formula is
-        written in terms of the full state size (see that branch). Defaults to
-        2*local_P, the conj_sym=True case.
-        """
         if full_N is None:
             full_N = 2 * local_P
         def _cplx(re, im):
@@ -362,16 +254,6 @@ class S5SSMCell(nn.Module):
         return self.lambda_bar
 
     def step(self, u, dt, state=None, lesion_idx=None):
-        """
-        Perform a single time-step update.
-        Args:
-            u: (B, H_in) real tensor input.
-            dt: scalar float integration timestep.
-            state: (B, local_P) complex tensor of previous state; if None, initializes to zeros.
-        Returns:
-            output: (B, H_out) real tensor output.
-            new_state: (B, local_P) complex tensor updated state.
-        """
         B_size = u.shape[0]
         if state is None:
             state = torch.zeros(B_size, self.local_P, dtype=torch.complex64, device=u.device)
@@ -392,18 +274,6 @@ class S5SSMCell(nn.Module):
         return output, new_state
 
 class AC_SSM_stack(nn.Module):
-    """
-    Actor–Critic network that uses stacked SSM cells (S5SSMCell) as its recurrent core.
-
-    Args:
-        input_dimensions (int): Dimension of sensory input.
-        action_dimensions (int): Number of possible actions.
-        batch_size (int): Batch size.
-        hidden_dim (int): Dimension of SSM cell output (for each cell).
-        ssm_params (dict): Parameters for S5SSMCell. Expected keys include:
-            'P', 'C_init', 'discretization', 'dt_min', 'dt_max', 'conj_sym', 'step_rescale'
-        p_dropout (float): Dropout probability.
-    """
     def __init__(self, input_dimensions, action_dimensions, hidden_dim, ssm_params, batch_size=1, p_dropout=0):
         super().__init__()
         self.input_d = input_dimensions
@@ -457,16 +327,6 @@ class AC_SSM_stack(nn.Module):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     def forward(self, x, dt=0.05, lesion_idx=None):
-        """
-        Forward pass for one time step with stacked SSM cells.
-        Args:
-            x: (B, input_d) real tensor input.
-            dt: scalar float integration timestep.
-        Returns:
-            policy: (B, action_d) softmax probabilities.
-            value: (B, 1) state value.
-            lin_act: (B, hidden_dim) raw SSM cell output from the *last* cell (before dropout), for logging.
-        """
         ssm_out1, self.hidden_state1 = self.ssm_cell1.step(x, dt, self.hidden_state1, lesion_idx)
         if self.spiking:
             ssm_out1 = self.ste(ssm_out1, self.alpha)
@@ -488,9 +348,6 @@ class AC_SSM_stack(nn.Module):
         return policy, value, lin_act
 
     def reinit_hid(self):
-        """
-        Reinitialize the recurrent hidden states for both SSM cells.
-        """
         self.hidden_state1 = None
         self.hidden_state2 = None
 

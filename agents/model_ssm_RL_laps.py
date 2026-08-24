@@ -10,16 +10,6 @@ import jax
 SavedAction = namedtuple('SavedAction', ['log_prob', 'value', 'policy'])
 
 def discount_rwds(r, gamma):
-    """
-    Compute discounted rewards-to-go for each timestep.
-
-    Args:
-        r (np.array): An array of rewards for each timestep of an episode.
-        gamma (float): The discount factor (e.g., 0.99).
-
-    Returns:
-        np.array: The array of discounted rewards (returns).
-    """
     disc_rwds = np.zeros_like(r, dtype=float)
     running_add = 0.0
     for t in reversed(range(len(r))):
@@ -28,19 +18,6 @@ def discount_rwds(r, gamma):
     return disc_rwds
 
 def select_action(model, policy_, value_):
-    """
-    Samples an action from the policy distribution, stores action info, and returns the action.
-
-    Args:
-        model: The actor–critic model. Must have a `saved_actions` list attribute.
-        policy_ (torch.Tensor): A tensor from the model's actor head, representing action probabilities.
-        value_ (torch.Tensor): A tensor from the model's critic head, representing the state value estimate.
-
-    Returns:
-        action (int): The sampled action.
-        policy_info (torch.Tensor): The raw policy tensor for logging.
-        value_info (float): The state value as a float for logging.
-    """
     m = Categorical(policy_)
     action = m.sample()
 
@@ -49,13 +26,6 @@ def select_action(model, policy_, value_):
     return action.item(), policy_.data, value_.squeeze().item()
 
 def finish_run(model, discount_factor, optimizer, scheduler=None, value_loss_weight=0.5, entropy_weight=0.01):
-    """
-    Completes a training trial (episode) by computing losses and updating model weights.
-    This function implements a full Advantage Actor-Critic (A2C) update step.
-
-    Returns:
-        Tuple of (policy_loss, value_loss, total_loss) as floats for logging.
-    """
     saved_actions = model.saved_actions
 
     returns = discount_rwds(np.asarray(model.rewards), gamma=discount_factor)
@@ -99,15 +69,6 @@ def finish_run(model, discount_factor, optimizer, scheduler=None, value_loss_wei
     return policy_loss.item(), value_loss.item(), total_loss.item()
 
 def discretize_zoh(Lambda, step_delta, time_delta):
-    """
-    Discretize a diagonal (complex) state matrix using the zero-order hold method.
-    Args:
-        Lambda: torch.complex tensor of shape (P,)
-        step_delta: torch tensor of shape (P,) (real)
-        time_delta: scalar float (integration timestep)
-    Returns:
-        Lambda_bar, gamma_bar – both torch.complex tensors of shape (P,)
-    """
     Identity = torch.ones(Lambda.shape, dtype=Lambda.dtype, device=Lambda.device)
     Delta = step_delta * time_delta
     Lambda_bar = torch.exp(Lambda * Delta)
@@ -115,44 +76,24 @@ def discretize_zoh(Lambda, step_delta, time_delta):
     return Lambda_bar, gamma_bar
 
 def discretize_dirac(Lambda, step_delta, time_delta):
-    """
-    Discretize with Dirac-delta input spikes.
-    """
     Delta = step_delta * time_delta
     Lambda_bar = torch.exp(Lambda * Delta)
     gamma_bar = torch.tensor(1.0, dtype=Lambda.dtype, device=Lambda.device)
     return Lambda_bar, gamma_bar
 
 def discretize_async(Lambda, step_delta, time_delta):
-    """
-    Discretize with asynchronous (Dirac-delta with normalization) method.
-    """
     Identity = torch.ones(Lambda.shape, dtype=Lambda.dtype, device=Lambda.device)
     Lambda_bar = torch.exp(Lambda * step_delta * time_delta)
     gamma_bar = (1.0 / Lambda) * (torch.exp(Lambda * step_delta) - Identity)
     return Lambda_bar, gamma_bar
 
 def make_HiPPO(N):
-    """
-    Create a HiPPO-LegS matrix.
-    Args:
-        N: int, state size.
-    Returns:
-        A: (N, N) HiPPO-LegS matrix (torch.float32)
-    """
     n = torch.arange(N, dtype=torch.float32)
     P_vec = torch.sqrt(1 + 2 * n)
     A = torch.tril(P_vec[:, None] * P_vec[None, :]) - torch.diag(n)
     return -A
 
 def make_NPLR_HiPPO(N):
-    """
-    Compute components needed for the NPLR representation of HiPPO-LegS.
-    Returns:
-        A: HiPPO matrix (N x N)
-        P_vec: (N,) low-rank vector
-        B: (N,) HiPPO input vector
-    """
     n = torch.arange(N, dtype=torch.float32)
     A = make_HiPPO(N)
     P_vec = torch.sqrt(n + 0.5)
@@ -160,16 +101,6 @@ def make_NPLR_HiPPO(N):
     return A, P_vec, B
 
 def make_DPLR_HiPPO(N):
-    """
-    Compute components for a DPLR representation of HiPPO-LegS.
-    We return the diagonal (eigenvalue) part along with additional factors.
-    Returns:
-        Lambda: (N,) complex eigenvalues.
-        P_transformed: transformed low-rank term.
-        B_transformed: (N,) complex, input projection vector.
-        V: eigenvector matrix.
-        B_orig: original B vector (complex).
-    """
     A, P_vec, B = make_NPLR_HiPPO(N)
     S = A + torch.outer(P_vec, P_vec)
     S_diag = torch.diag(S)
@@ -200,13 +131,6 @@ class SpikeSTE(torch.autograd.Function):
         return grad_output * surrogate_grad, (grad_output * sigma *(1-sigma) ).sum()
 
 class LIFSpike(torch.autograd.Function):
-    """
-    A single function that implements the Leaky Integrate-and-Fire (LIF) neuron
-    dynamics and the surrogate gradient for backpropagation.
-    The forward pass computes the neuron's state update (integrate, fire, reset).
-    The backward pass computes the surrogate gradient.
-    This version is designed to prevent in-place modification errors in recurrent settings.
-    """
 
     @staticmethod
     def forward(ctx, input_current, mem_in, threshold, alpha):
@@ -242,23 +166,6 @@ class LIFSpike(torch.autograd.Function):
         return grad_input_current, grad_prev_mem, None, grad_alpha
 
 class S5SSMCell(nn.Module):
-    """
-    A single-step state-space model cell using HIPPO initialization.
-    This cell implements:
-        new_state = Lambda_bar * state + gamma_bar * (B @ u)
-        output    = Re( C_tilde @ new_state ) [+ feedthrough]
-    The discretized matrices are computed on the fly.
-
-    Args:
-        H_in (int): input dimension.
-        H_out (int): output dimension.
-        P (int): full state dimension.
-        C_init (str): initialization method for C ("trunc_standard_normal" or "lecun_normal").
-        discretization (str): "zoh", "dirac", or "async".
-        dt_min, dt_max (float): range for the learnable time constants.
-        conj_sym (bool): if True, uses half the state (enforcing conjugate symmetry).
-        step_rescale (float): multiplier for learned time constants.
-    """
     def __init__(self, H_in, H_out, P,
                  C_init="trunc_standard_normal",
                  discretization="zoh",
@@ -320,16 +227,6 @@ jax.device_get(Lambda), copy=True)
             raise NotImplementedError(f"Discretization method {discretization} not implemented")
 
     def step(self, u, dt, state=None, lesion_idx=None):
-        """
-        Perform a single time-step update.
-        Args:
-            u: (B, H_in) real tensor input.
-            dt: scalar float integration timestep.
-            state: (B, local_P) complex tensor of previous state; if None, initializes to zeros.
-        Returns:
-            output: (B, H_out) real tensor output.
-            new_state: (B, local_P) complex tensor updated state.
-        """
         B_size = u.shape[0]
         if state is None:
             state = torch.zeros(B_size, self.local_P, dtype=torch.complex64, device=u.device)
@@ -350,18 +247,6 @@ jax.device_get(Lambda), copy=True)
         return output, new_state
 
 class AC_SSM_stack(nn.Module):
-    """
-    Actor–Critic network that uses stacked SSM cells (S5SSMCell) as its recurrent core.
-
-    Args:
-        input_dimensions (int): Dimension of sensory input.
-        action_dimensions (int): Number of possible actions.
-        batch_size (int): Batch size.
-        hidden_dim (int): Dimension of SSM cell output (for each cell).
-        ssm_params (dict): Parameters for S5SSMCell. Expected keys include:
-            'P', 'C_init', 'discretization', 'dt_min', 'dt_max', 'conj_sym', 'step_rescale'
-        p_dropout (float): Dropout probability.
-    """
     def __init__(self, input_dimensions, action_dimensions, hidden_dim, ssm_params, batch_size=1, p_dropout=0, threshold=0.5):
         super().__init__()
         self.input_d = input_dimensions
@@ -418,15 +303,6 @@ class AC_SSM_stack(nn.Module):
     def add_probe(self):
         self.linear_probe = nn.LSTMCell(self.hidden_dim, 4, device=self.device)
     def forward_linear_probe(self, x, dt=0.05, lesion_idx=None):
-        """
-        New forward pass for training a linear probe on top of the frozen SSM stack.
-        It computes the SSM representation in no_grad mode and passes it to a new trainable linear layer.
-        Args:
-            x: (B, input_d) real tensor input.
-            dt: scalar float integration timestep.
-        Returns:
-            probe_output: (B, 4) raw logits from the new linear probe layer.
-        """
         with torch.no_grad():
             ssm_out1, self.hidden_state1 = self.ssm_cell1.step(x, dt, self.hidden_state1, lesion_idx)
             if self.spiking:
@@ -446,16 +322,6 @@ class AC_SSM_stack(nn.Module):
         return probe_output
 
     def forward(self, x, dt=0.05, lesion_idx=None):
-        """
-        Forward pass for one time step with stacked SSM cells.
-        Args:
-            x: (B, input_d) real tensor input.
-            dt: scalar float integration timestep.
-        Returns:
-            policy: (B, action_d) softmax probabilities.
-            value: (B, 1) state value.
-            lin_act: (B, hidden_dim) raw SSM cell output from the *last* cell (before dropout), for logging.
-        """
         ssm_out1, self.hidden_state1 = self.ssm_cell1.step(x, dt, self.hidden_state1, lesion_idx)
         if self.spiking:
             ssm_out1, self.mem = self.ste(ssm_out1, self.mem.detach(), self.threshold, self.alpha)
@@ -477,29 +343,10 @@ class AC_SSM_stack(nn.Module):
         return policy, value, lin_act
 
     def reinit_hid(self):
-        """
-        Reinitialize the recurrent hidden states for both SSM cells.
-        """
         self.hidden_state1 = None
         self.hidden_state2 = None
 
 def finish_readout(model, probe_output, label, optimizer, lap_ending):
-    """
-    Computes the loss, performs one step of backpropagation, and updates the weights
-    for the linear probe layer.
-
-    Args:
-        model (torch.nn.Module): The model containing the linear_probe.
-        probe_output (torch.Tensor): Raw logits from the forward_linear_probe function. Shape: (B, num_classes).
-        label (torch.Tensor): Ground truth labels. Shape: (B,).
-        optimizer (torch.optim.Optimizer): The optimizer configured to train *only* the
-                                           linear_probe's parameters.
-        loss_fn (torch.nn.Module): The loss function, e.g., nn.CrossEntropyLoss.
-
-    Returns:
-        pred (torch.Tensor): The predicted class indices for the batch.
-        total_loss (torch.Tensor): The scalar loss value for this step.
-    """
     label = torch.tensor([label], dtype=torch.float32, device='cuda')
     weight = 100 if lap_ending else 0.001
     total_loss = F.mse_loss(probe_output, label, reduction='sum')*weight

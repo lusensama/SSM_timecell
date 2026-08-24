@@ -5,13 +5,6 @@ import copy
 from gym import spaces
 
 class IntervalDiscrimination(object):
-    '''
-    Interval discrimination, head-fixed agent. After an initiation cue, the agent pokes to initiate the task.
-    Then two stimulus are shown sequentially, seperated by a delay period. The duration of each stimulus is
-    randomly drawn from [10,15,20,25,30,35,40]. The length of the delay period is 20 time steps. After the second
-    stimulus presentation, a "Go" cue would show up, and the agent is going to produce an action of either "0"
-    or "1" to indicate whether the first stimulus was longer in duration or the second one.
-    '''
 
     def __init__(self, rwd=10, inc_rwd=-10, seed=1):
         self.stimulus_set = [10,15, 20,25, 30,35, 40,45, 50]
@@ -43,10 +36,6 @@ class IntervalDiscrimination(object):
         self.observation = [1,1]
 
     def step(self, action=None):
-        """
-        :param action
-        :return: observation, reward, done, info
-        """
 
         if self.task_stage == "init":
             if action == 1:
@@ -94,10 +83,6 @@ class IntervalDiscrimination(object):
 
         return self.observation, self.reward, self.done
     def calc_reward_without_stepping(self, action=None):
-        """
-        :param action
-        :return: observation, reward, done
-        """
 
         if self.task_stage == "init":
             if action == 1:
@@ -120,13 +105,6 @@ class IntervalDiscrimination(object):
         return np.random.choice(stimulus_set_copy)
 
 class IntervalDiscrimination3(object):
-    '''
-    Interval discrimination, head-fixed agent with three stimuli.
-    After an initiation cue, the agent pokes to begin. Then three stimuli are
-    shown sequentially, each lasting a randomly drawn duration from stimulus_set,
-    separated by a fixed delay. After the third stimulus, a "Go" cue appears and
-    the agent must choose which stimulus was longest (action in {0,1,2}).
-    '''
 
     def __init__(self, rwd=10, inc_rwd=-10, seed=1):
         self.stimulus_set   = [10,20,30,]
@@ -264,13 +242,6 @@ class IntervalDiscrimination3(object):
         return self.rng.choice(choices)
 
 class IntDiscrim3_Intermediate(object):
-    '''
-    Interval discrimination, head-fixed agent with three stimuli.
-    After an initiation cue, the agent pokes to begin. Then three stimuli are
-    shown sequentially, each lasting a randomly drawn duration from stimulus_set,
-    separated by a fixed delay. After the third stimulus, a "Go" cue appears and
-    the agent must choose which stimulus was longest (action in {0,1,2}).
-    '''
 
     def __init__(self, rwd=10, inc_rwd=-10, seed=1, delay=100, fixed_delay=True):
         self.stimulus_set   = [10,15, 20,25, 30,35, 40,45,50]
@@ -430,13 +401,6 @@ class IntDiscrim3_Intermediate(object):
         return self.rng.choice(choices)
 
 class IntDiscrim3_Intermediate_Pre_delay(object):
-    '''
-    Interval discrimination, head-fixed agent with three stimuli.
-    After an initiation cue, the agent pokes to begin. Then three stimuli are
-    shown sequentially, each lasting a randomly drawn duration from stimulus_set,
-    separated by a fixed delay. After the third stimulus, a "Go" cue appears and
-    the agent must choose which stimulus was longest (action in {0,1,2}).
-    '''
 
     def __init__(self, rwd=10, inc_rwd=-10, seed=1, delay=100, max_pre=50):
         self.stimulus_set   = [10,15, 20,25, 30,35, 40,45, 50]

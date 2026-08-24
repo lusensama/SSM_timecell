@@ -1,7 +1,3 @@
-"""
-Helper functions for 3 stimulation task analysis
-"""
-
 import os
 import random
 import argparse
@@ -18,13 +14,11 @@ from envs.int_discrim import IntDiscrim3_Intermediate
 from utils.utils_analysis import sort_resp, sort_freq_resp
 
 def setup_directories(base_dir="plots"):
-    """Creates necessary directories for saving plots and returns the path."""
     if not os.path.exists(base_dir):
         os.makedirs(base_dir)
     return base_dir
 
 def load_net_env(model_path: str, n_neurons: int, device: torch.device, delay: int, fixed_delay: bool):
-    """Initializes the network and environment, and loads a pre-trained model."""
     has_layer2 = False
     is_spiking = False
     if model_path:
@@ -60,9 +54,6 @@ def load_net_env(model_path: str, n_neurons: int, device: torch.device, delay: i
     return net, env
 
 def collect_hidden_states(net, env, n_inferences, n_neurons, stim_dur, delay_dur, device):
-    """
-	Runs inference and collects raw data: complex hidden states, spike logs, and trial outcomes.
-	"""
     phase_info = {
         'stim1': stim_dur, 'delay1': delay_dur, 'stim2': stim_dur,
         'delay2': delay_dur, 'stim3': stim_dur
@@ -128,23 +119,6 @@ def collect_hidden_states(net, env, n_inferences, n_neurons, stim_dur, delay_dur
     return raw_data, spiking_entries1, correct_trials_log
 
 def get_frequency_indices(data, start=0, end=200, thr=0.5):
-    """
-    Separates sample indices into high and low change lists based on a threshold.
-
-    A sample is considered "high change" if the absolute difference between any
-    two consecutive timesteps within the [start, end) window is greater than thr.
-
-    Args:
-        data (np.ndarray): The input array of shape (n_samples, n_timesteps).
-        start (int): The starting timestep index of the window to analyze.
-        end (int): The ending timestep index (exclusive) of the window.
-        thr (float): The threshold for absolute change to be considered significant.
-
-    Returns:
-        tuple[list, list]: A tuple containing two lists:
-                           - high_list: Indices of samples with high change.
-                           - low_list: Indices of samples with low change.
-    """
     if end > data.shape[1]:
         raise ValueError("The 'end' index is out of bounds for the data's timesteps.")
 
@@ -169,9 +143,6 @@ def reshape_resp(total_resp):
 def plot_sorted_activity(data, phases, layer, delay, normalized, save_path, cmap='jet',
                          n_total_episodes=100, pre_sort=None, fixed_indices=None, thr=0.3,
                          fig_index="2b"):
-    """
-	Builds and saves sorted/unsorted heatmaps.
-	"""
     mats_complex = {}
     mats_real = {}
     for phase in phases:
@@ -390,9 +361,6 @@ def extract_lambda_bars(model_path: str, plot_dir: str, args, untrained: bool=Fa
 def analyze_model_example(model_path, n_neurons, delay, fixed_delay, seed,
                           n_inferences=1000, normalized=True, mode='plot',
                           fixed_indices=None, thr=0.3, fig_index="2b"):
-    """
-    Run analysis and plotting for a single model file.
-    """
     base_name = os.path.splitext(os.path.basename(model_path))[0]
     plot_dir = setup_directories("./figures")
     if not os.path.exists(plot_dir):
