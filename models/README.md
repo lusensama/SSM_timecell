@@ -40,7 +40,7 @@ separates them.
 ## Loading
 
 ```bash
-python train_and_plot_3stim.py --spike --delay 30 --n_neurons 50 \
+python train_and_plot_3stim.py --delay 30 --n_neurons 50 \
     --init_method hippo --load_model --model_path models/3stim_hippo_best.pt \
     --n_eval_episodes 2000
 ```

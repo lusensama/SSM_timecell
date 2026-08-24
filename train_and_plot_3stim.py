@@ -54,9 +54,6 @@ def save_lambda_bar_from_model(model: torch.nn.Module, save_path: str, default_d
     if hasattr(model, 'ssm_cell1'):
         lam1 = _ensure_lambda_bar(model.ssm_cell1)
         out['ssm_cell1_lambda_bar'] = lam1.detach().cpu()
-    if hasattr(model, 'ssm_cell2') and getattr(model, 'layer2', False):
-        lam2 = _ensure_lambda_bar(model.ssm_cell2)
-        out['ssm_cell2_lambda_bar'] = lam2.detach().cpu()
 
     os.makedirs(os.path.dirname(os.path.abspath(save_path)), exist_ok=True)
     torch.save(out, save_path)
@@ -66,8 +63,6 @@ def save_lambda_from_model(model: torch.nn.Module, save_path: str) -> str:
     out = {}
     if hasattr(model, 'ssm_cell1') and hasattr(model.ssm_cell1, 'Lambda_param'):
         out['ssm_cell1_lambda'] = model.ssm_cell1.Lambda_param.detach().cpu()
-    if hasattr(model, 'ssm_cell2') and getattr(model, 'layer2', False) and hasattr(model.ssm_cell2, 'Lambda_param'):
-        out['ssm_cell2_lambda'] = model.ssm_cell2.Lambda_param.detach().cpu()
     os.makedirs(os.path.dirname(os.path.abspath(save_path)), exist_ok=True)
     torch.save(out, save_path)
     return save_path
@@ -76,8 +71,6 @@ def save_B_from_model(model: torch.nn.Module, save_path: str) -> str:
     out = {}
     if hasattr(model, 'ssm_cell1') and hasattr(model.ssm_cell1, 'B'):
         out['ssm_cell1_B'] = model.ssm_cell1.B.detach().cpu()
-    if hasattr(model, 'ssm_cell2') and getattr(model, 'layer2', False) and hasattr(model.ssm_cell2, 'B'):
-        out['ssm_cell2_B'] = model.ssm_cell2.B.detach().cpu()
     os.makedirs(os.path.dirname(os.path.abspath(save_path)), exist_ok=True)
     torch.save(out, save_path)
     return save_path
@@ -86,29 +79,21 @@ def save_C_tilde_from_model(model: torch.nn.Module, save_path: str) -> str:
     out = {}
     if hasattr(model, 'ssm_cell1') and hasattr(model.ssm_cell1, 'C_tilde'):
         out['ssm_cell1_C_tilde'] = model.ssm_cell1.C_tilde.detach().cpu()
-    if hasattr(model, 'ssm_cell2') and getattr(model, 'layer2', False) and hasattr(model.ssm_cell2, 'C_tilde'):
-        out['ssm_cell2_C_tilde'] = model.ssm_cell2.C_tilde.detach().cpu()
     os.makedirs(os.path.dirname(os.path.abspath(save_path)), exist_ok=True)
     torch.save(out, save_path)
     return save_path
 
-def freeze_ssm_params(net, layer2, freeze_lambda=False, freeze_B=False):
+def freeze_ssm_params(net, freeze_lambda=False, freeze_B=False):
     if freeze_lambda:
         if hasattr(net, 'ssm_cell1') and hasattr(net.ssm_cell1, 'Lambda_param'):
             net.ssm_cell1.Lambda_param.requires_grad_(False)
-            print("Froze Lambda matrix (A) for first SSM layer.")
-        if layer2 and hasattr(net, 'ssm_cell2') and hasattr(net.ssm_cell2, 'Lambda_param'):
-            net.ssm_cell2.Lambda_param.requires_grad_(False)
-            print("Froze Lambda matrix (A) for second SSM layer.")
+            print("Froze Lambda matrix (A) for the SSM layer.")
     if freeze_B:
         if hasattr(net, 'ssm_cell1') and hasattr(net.ssm_cell1, 'B'):
             net.ssm_cell1.B.requires_grad_(False)
-            print("Froze input projection B for first SSM layer.")
-        if layer2 and hasattr(net, 'ssm_cell2') and hasattr(net.ssm_cell2, 'B'):
-            net.ssm_cell2.B.requires_grad_(False)
-            print("Froze input projection B for second SSM layer.")
+            print("Froze input projection B for the SSM layer.")
 
-def build_net(hidden_type, n_neurons, spike, layer2, device,
+def build_net(hidden_type, n_neurons, spike, device,
               init_mode="hippo", perturb_eps=0.1, rand_init=False,
               rnn_spike=False, p_dropout=0.1):
     if hidden_type == "ssm":
@@ -124,7 +109,6 @@ def build_net(hidden_type, n_neurons, spike, layer2, device,
             "init_perturb_eps": perturb_eps,
             "step_rescale": 1.0,
             "spike": spike,
-            "layer2": layer2,
         }
         return AC_SSM_stack(
             input_dimensions=3,
@@ -144,16 +128,15 @@ def build_net(hidden_type, n_neurons, spike, layer2, device,
         batch_size=1,
         p_dropout=p_dropout,
         spike=spike,
-        layer2=layer2,
         rnn_spike=rnn_spike,
     ).to(device)
 
-def freeze_backbone_params(net, hidden_type, layer2, freeze_lambda=False, freeze_B=False):
+def freeze_backbone_params(net, hidden_type, freeze_lambda=False, freeze_B=False):
     if hidden_type == "ssm":
-        freeze_ssm_params(net, layer2, freeze_lambda=freeze_lambda, freeze_B=freeze_B)
+        freeze_ssm_params(net, freeze_lambda=freeze_lambda, freeze_B=freeze_B)
     else:
         from agents.model_lstm_RL import freeze_rnn_params
-        freeze_rnn_params(net, layer2, freeze_lambda=freeze_lambda, freeze_B=freeze_B)
+        freeze_rnn_params(net, freeze_lambda=freeze_lambda, freeze_B=freeze_B)
 
 def build_freeze_suffix(freeze_lambda: bool, freeze_B: bool) -> str:
     tags = []
@@ -180,7 +163,6 @@ def train_3stim(
     seed: int,
     delay: int,
     spike: bool,
-    layer2: bool,
     device: torch.device,
     save_dir: str,
     eval_every: int,
@@ -201,7 +183,6 @@ def train_3stim(
         hidden_type=hidden_type,
         n_neurons=n_neurons,
         spike=spike,
-        layer2=layer2,
         device=device,
         init_mode=init_mode,
         perturb_eps=perturb_eps,
@@ -216,7 +197,7 @@ def train_3stim(
         else:
             raise FileNotFoundError(f"Resume checkpoint not found: {resume_checkpoint}")
     if freeze_lambda or freeze_B:
-        freeze_backbone_params(net, hidden_type, layer2,
+        freeze_backbone_params(net, hidden_type,
                                freeze_lambda=freeze_lambda, freeze_B=freeze_B)
     file_suffix = build_freeze_suffix(freeze_lambda, freeze_B)
     try:
@@ -251,19 +232,9 @@ def train_3stim(
         episode_rewards = []
         episode_saved_actions = []
         while not done:
-            if spike:
-                if layer2:
-                    pol, val, lin_act, _, _ = net.forward(
-                        torch.unsqueeze(torch.Tensor(env.observation).float(), dim=0).to(device)
-                    )
-                else:
-                    pol, val, lin_act, _ = net.forward(
-                        torch.unsqueeze(torch.Tensor(env.observation).float(), dim=0).to(device)
-                    )
-            else:
-                pol, val, lin_act = net.forward(
-                    torch.unsqueeze(torch.Tensor(env.observation).float(), dim=0).to(device)
-                )
+            pol, val, lin_act = net.forward(
+                torch.unsqueeze(torch.Tensor(env.observation).float(), dim=0).to(device)
+            )[:3]
 
             action_to_take = None
             if env.task_stage == 'init':
@@ -318,7 +289,6 @@ def train_3stim(
                 env=env,
                 device=device,
                 n_episodes=n_eval_episodes,
-                layer2=layer2,
             )
             print(f"Eval @ episode {i_episode + 1}: {acc:.3f}% over {n_eval_episodes} episodes")
             if acc > best_eval_acc:
@@ -343,7 +313,6 @@ def eval_accuracy_3stim(
     env: IntDiscrim3_Intermediate,
     device: torch.device,
     n_episodes: int,
-    layer2: bool,
 ):
     net.eval()
     correct = 0
@@ -352,9 +321,9 @@ def eval_accuracy_3stim(
         env.reset()
         net.reinit_hid()
         while not done:
-            pol, val, lin_act,_ = net.forward(
+            pol, val, lin_act = net.forward(
                 torch.unsqueeze(torch.Tensor(env.observation).float(), dim=0).to(device)
-            )
+            )[:3]
             if env.task_stage == 'init':
                 new_obs, reward, done = env.step(1)
             elif env.task_stage == 'intermediate_choice_init':
@@ -385,17 +354,20 @@ def main():
                         help="Index string used in saved figure filenames (e.g., '2b').")
     parser.add_argument("--seed", type=int, default=72)
     parser.add_argument("--delay", type=int, default=30)
-    parser.add_argument("--spike", action='store_true', default=False)
+    parser.add_argument("--spike", action='store_true', default=True,
+                        help="Spiking SSM (surrogate-gradient STE). On by default.")
+    parser.add_argument("--no_spike", dest='spike', action='store_false',
+                        help="Disable the spiking nonlinearity.")
     parser.add_argument("--init_method", type=str,
                         choices=["hippo", "rand_complex", "spectrum_matched",
                                  "freq_matched", "perturbed_hippo", "alt_basis",
                                  "s4d_lin", "s4d_inv", "real_diagonal"],
                         default="hippo",
-                        help="SSM initialization mode (see experiment1_matched_init_controls.txt).")
+                        help="SSM initialization mode.")
     parser.add_argument("--perturb_eps", type=float, default=0.1,
                         help="Noise scale for --init_method perturbed_hippo.")
     parser.add_argument("--hidden_type", type=str,
-                        choices=["ssm", "lstm", "gru", "rnn", "linear"],
+                        choices=["ssm", "lstm"],
                         default="ssm",
                         help="Recurrent backbone. 'ssm' is the manuscript's "
                              "AC_SSM_stack; the rest use the AC_RNN backbone "
@@ -403,12 +375,11 @@ def main():
                              "(agents/model_lstm_RL.py). --init_method and "
                              "--perturb_eps are SSM-only and ignored otherwise.")
     parser.add_argument("--rnn_spike", action='store_true', default=False,
-                        help="Apply the surrogate-gradient spike to the RNN "
+                        help="Apply the surrogate-gradient spike to the LSTM "
                              "backbone's cell output too. Off by default: "
                              "--spike is an SSM setting and only fixes the "
-                             "forward() return arity for RNN backbones. See "
+                             "forward() return arity for the LSTM backbone. See "
                              "agents/model_lstm_RL.py.")
-    parser.add_argument("--layer2", action='store_true', default=False)
     parser.add_argument("--partial", action='store_true', default=False)
     parser.add_argument("--save_dir", type=str, default="./training/3stim")
     parser.add_argument("--eval_every", type=int, default=100)
@@ -447,8 +418,6 @@ def main():
         save_dir_str += f'_spiking'
     if args.rnn_spike and args.hidden_type != "ssm":
         save_dir_str += f'_rnnspike'
-    if args.layer2:
-        save_dir_str += f'_2layer'
     save_dir_str += f'_delay{args.delay}'
     if args.fixed_delay:
         save_dir_str += '_fixedDelay'
@@ -461,7 +430,6 @@ def main():
             hidden_type=args.hidden_type,
             n_neurons=args.n_neurons,
             spike=args.spike,
-            layer2=args.layer2,
             device=device,
             init_mode=args.init_method,
             perturb_eps=args.perturb_eps,
@@ -469,7 +437,7 @@ def main():
             rnn_spike=args.rnn_spike,
         )
         if args.freeze_lambda or args.freeze_B:
-            freeze_backbone_params(net, args.hidden_type, args.layer2,
+            freeze_backbone_params(net, args.hidden_type,
                                    freeze_lambda=args.freeze_lambda,
                                    freeze_B=args.freeze_B)
         net.reinit_hid()
@@ -496,7 +464,6 @@ def main():
             seed=args.seed,
             delay=args.delay,
             spike=args.spike,
-            layer2=args.layer2,
             device=device,
             save_dir=save_dir,
             eval_every=args.eval_every,
@@ -517,7 +484,6 @@ def main():
         env=env,
         device=device,
         n_episodes=args.n_eval_episodes,
-        layer2=args.layer2,
     )
     print(f"Evaluation accuracy over {args.n_eval_episodes} episodes: {eval_acc:.3f}%")
     if not args.load_model:

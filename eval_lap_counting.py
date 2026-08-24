@@ -17,7 +17,7 @@ def build_net(n_neurons, seed):
     ssm_params = dict(P=n_neurons * 2, C_init="trunc_standard_normal",
                       discretization="zoh", dt_min=0.001, dt_max=0.1,
                       conj_sym=True, step_rescale=1.0,
-                      spike=False, layer2=False, lap_count=4)
+                      spike=False, lap_count=4)
     return AC_SSM_stack(input_dimensions=2, action_dimensions=2, batch_size=1,
                         hidden_dim=n_neurons, ssm_params=ssm_params,
                         p_dropout=0.1).to(DEV)

@@ -38,7 +38,6 @@ export JAX_PLATFORMS=cpu
 
 ```bash
 python train_and_plot_3stim.py \
-  --spike \
   --n_total_episodes 200000 \
   --n_eval_episodes 100 \
   --n_neurons 50 \
@@ -46,9 +45,10 @@ python train_and_plot_3stim.py \
   --seed 72 --delay 30 --eval_every 100
 ```
 
-Other flags: `--layer2` (two SSM layers), `--init_method`, `--freeze_lambda`,
-`--freeze_B`, `--save_dir` (default `./training/3stim`), and
-`--load_model --model_path <ckpt.pt>` to skip training and only evaluate/plot.
+The spiking SSM is on by default; pass `--no_spike` to disable it. Other flags:
+`--init_method`, `--freeze_lambda`, `--freeze_B`, `--save_dir` (default
+`./training/3stim`), and `--load_model --model_path <ckpt.pt>` to skip training
+and only evaluate/plot.
 
 Lap counting under randomised timing (the redesigned task -- lap count and lap
 length are both drawn fresh every episode):
@@ -87,7 +87,7 @@ training. `models/README.md` gives the numbers, the full candidate tables and
 the script that produced each file.
 
 ```bash
-python train_and_plot_3stim.py --spike --delay 30 --n_neurons 50 \
+python train_and_plot_3stim.py --delay 30 --n_neurons 50 \
     --init_method hippo --load_model --model_path models/3stim_hippo_best.pt \
     --n_eval_episodes 2000
 ```

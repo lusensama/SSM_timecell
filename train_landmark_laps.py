@@ -53,7 +53,6 @@ def build_net(args, device):
         "conj_sym": True,
         "step_rescale": 1.0,
         "spike": False,
-        "layer2": args.layer2,
         "lap_count": args.lap_count,
     }
     net = AC_SSM_stack(
@@ -340,7 +339,6 @@ def main():
     p.add_argument("--term_rwd", type=float, default=2.0)
 
     p.add_argument("--n_neurons", type=int, default=80)
-    p.add_argument("--layer2", action="store_true", default=False)
     p.add_argument("--p_dropout", type=float, default=0.1)
     p.add_argument("--lr", type=float, default=3e-3)
     p.add_argument("--weight_decay", type=float, default=1e-6)

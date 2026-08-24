@@ -19,10 +19,8 @@ def setup_directories(base_dir="plots"):
     return base_dir
 
 def load_net_env(model_path: str, n_neurons: int, device: torch.device, delay: int, fixed_delay: bool):
-    has_layer2 = False
     is_spiking = False
     if model_path:
-        has_layer2 = '_2layer' in model_path
         is_spiking = '_spiking' in model_path
 
     env = IntDiscrim3_Intermediate(seed=0, delay=delay, fixed_delay=fixed_delay)
@@ -35,8 +33,7 @@ def load_net_env(model_path: str, n_neurons: int, device: torch.device, delay: i
         "dt_max": 0.1,
         "conj_sym": True,
         "step_rescale": 1.0,
-        "spike": is_spiking,
-        "layer2": has_layer2
+        "spike": is_spiking
     }
     net = AC_SSM_stack(
         input_dimensions=3,
@@ -49,7 +46,7 @@ def load_net_env(model_path: str, n_neurons: int, device: torch.device, delay: i
         net.load_state_dict(torch.load(model_path, map_location=device))
     net.eval()
 
-    print(f"Model loaded. Spiking: {net.spiking}, Layer 2: {net.layer2}")
+    print(f"Model loaded. Spiking: {net.spiking}")
     print(f"Environment initialized with Delay: {delay}, Fixed Delay: {fixed_delay}")
     return net, env
 
@@ -66,18 +63,16 @@ def collect_hidden_states(net, env, n_inferences, n_neurons, stim_dur, delay_dur
     raw_data = {}
     for phase_name, duration in phase_info.items():
         raw_data[f"{phase_name}_resp1"] = np.zeros((n_inferences, duration, n_neurons), dtype=np.complex128)
-        if net.layer2:
-            raw_data[f"{phase_name}_resp2"] = np.zeros((n_inferences, duration, n_neurons), dtype=np.complex128)
 
-    spike_logs = {'layer1': [], 'layer2': []} if net.layer2 else {'layer1': []}
+    spike_logs = {'layer1': []}
     correct_trials_log = []
-    spiking_entries1, spiking_entries2 = [], []
+    spiking_entries1 = []
 
     for i in tqdm(range(n_inferences), desc="Running Inference"):
         env.reset()
         net.reinit_hid()
         done = False
-        spiking_row1, spiking_row2 = [[] for _ in range(5)], [[] for _ in range(5)]
+        spiking_row1 = [[] for _ in range(5)]
         seg_idx = 0
         ZERO = (0, 0, 0)
         prev_zero = tuple(env.observation) == ZERO
@@ -95,14 +90,9 @@ def collect_hidden_states(net, env, n_inferences, n_neurons, stim_dur, delay_dur
                 if t_idx < raw_data[f"{phase_name}_resp1"].shape[1]:
                     raw_data[f"{phase_name}_resp1"][i, t_idx,
                     :] = net.hidden_state1.clone().detach().cpu().numpy().squeeze()
-                    if net.layer2:
-                        raw_data[f"{phase_name}_resp2"][i, t_idx,
-                        :] = net.hidden_state2.clone().detach().cpu().numpy().squeeze()
 
                 if net.spiking and len(outputs) > 3:
                     spiking_row1[seg_idx].append(outputs[3].detach().cpu().numpy())
-                    if net.layer2 and len(outputs) > 4:
-                        spiking_row2[seg_idx].append(outputs[4].detach().cpu().numpy())
                     current_zero = tuple(env.observation) == ZERO
                     if current_zero != prev_zero:
                         seg_idx += 1
@@ -114,7 +104,6 @@ def collect_hidden_states(net, env, n_inferences, n_neurons, stim_dur, delay_dur
         correct_trials_log.append(env.correct_trial)
         if net.spiking:
             spiking_entries1.append(spiking_row1)
-            if net.layer2: spiking_entries2.append(spiking_row2)
 
     return raw_data, spiking_entries1, correct_trials_log
 
@@ -317,7 +306,6 @@ def extract_lambda_bars(model_path: str, plot_dir: str, args, untrained: bool=Fa
                 "conj_sym": True,
                 "step_rescale": 1.0,
                 "spike": True,
-                "layer2": False
             }
             torch.manual_seed(i)
             if torch.cuda.is_available():
@@ -391,7 +379,7 @@ def analyze_model_example(model_path, n_neurons, delay, fixed_delay, seed,
 
     if mode == 'plot':
         phases = ['stim1', 'delay1', 'stim2', 'delay2', 'stim3']
-        num_layers = 2 if getattr(net, 'layer2', False) else 1
+        num_layers = 1
 
         for layer in range(1, num_layers + 1):
             print(f"\n--- Generating plots for Layer {layer} ({base_name}) ---")

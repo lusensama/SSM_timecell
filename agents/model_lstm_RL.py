@@ -4,19 +4,13 @@ import torch.nn.functional as F
 
 from agents.model_ssm_stack_RL import SpikeSTE
 
-HIDDEN_TYPES = ("lstm", "gru", "rnn", "linear")
-
-_CELL_CLASSES = {
-    "lstm": nn.LSTMCell,
-    "gru": nn.GRUCell,
-    "rnn": nn.RNNCell,
-}
+HIDDEN_TYPES = ("lstm",)
 
 class AC_RNN(nn.Module):
 
     def __init__(self, input_dimensions, action_dimensions, hidden_dim,
                  hidden_type="lstm", batch_size=1, p_dropout=0.0,
-                 spike=False, layer2=False, rnn_spike=False):
+                 spike=True, rnn_spike=False):
         super().__init__()
 
         if hidden_type not in HIDDEN_TYPES:
@@ -29,17 +23,10 @@ class AC_RNN(nn.Module):
         self.hidden_dim = hidden_dim
         self.hidden_type = hidden_type
         self.batch_size = batch_size
-        self.layer2 = layer2
         self.spiking = spike
         self.rnn_spike = rnn_spike
 
-        if hidden_type == "linear":
-            self.cell1 = nn.Linear(input_dimensions, hidden_dim)
-            self.cell2 = nn.Linear(hidden_dim, hidden_dim) if layer2 else None
-        else:
-            cell_cls = _CELL_CLASSES[hidden_type]
-            self.cell1 = cell_cls(input_dimensions, hidden_dim)
-            self.cell2 = cell_cls(hidden_dim, hidden_dim) if layer2 else None
+        self.cell1 = nn.LSTMCell(input_dimensions, hidden_dim)
 
         self.readout = nn.Linear(hidden_dim, hidden_dim)
 
@@ -64,7 +51,7 @@ class AC_RNN(nn.Module):
 
     @property
     def n_cells(self):
-        return 2 if self.layer2 else 1
+        return 1
 
     @property
     def hidden_state1(self):
@@ -86,20 +73,10 @@ class AC_RNN(nn.Module):
         self.hx = []
         self.cx = []
         for _ in range(self.n_cells):
-            if self.hidden_type == "linear":
-                self.hx.append(None)
-                self.cx.append(None)
-            else:
-                self.hx.append(torch.zeros(self.batch_size, self.hidden_dim, device=dev))
-                self.cx.append(
-                    torch.zeros(self.batch_size, self.hidden_dim, device=dev)
-                    if self.hidden_type == "lstm" else None
-                )
+            self.hx.append(torch.zeros(self.batch_size, self.hidden_dim, device=dev))
+            self.cx.append(torch.zeros(self.batch_size, self.hidden_dim, device=dev))
 
     def _step_cell(self, cell, x, i, lesion_idx=None):
-        if isinstance(cell, nn.Linear):
-            return F.relu(cell(x))
-
         hx = self.hx[i]
         cx = self.cx[i]
         if lesion_idx is not None:
@@ -109,13 +86,9 @@ class AC_RNN(nn.Module):
                 cx = cx.clone().detach()
                 cx[:, lesion_idx] = 0
 
-        if isinstance(cell, nn.LSTMCell):
-            h_new, c_new = cell(x, (hx, cx))
-            self.hx[i] = h_new
-            self.cx[i] = c_new
-        else:
-            h_new = cell(x, hx)
-            self.hx[i] = h_new
+        h_new, c_new = cell(x, (hx, cx))
+        self.hx[i] = h_new
+        self.cx[i] = c_new
         return h_new
 
     def forward(self, x, dt=0.05, lesion_idx=None):
@@ -123,41 +96,20 @@ class AC_RNN(nn.Module):
         if self.rnn_spike:
             out1 = self.ste(out1, self.alpha)
 
-        if self.layer2:
-            out2 = self._step_cell(self.cell2, out1, 1, lesion_idx)
-            if self.rnn_spike:
-                out2 = self.ste(out2, self.alpha)
-        else:
-            out2 = out1
-
-        lin_act = F.relu(self.readout(out2))
+        lin_act = F.relu(self.readout(out1))
         head_in = self.dropout(lin_act)
 
         policy = F.softmax(self.actor(head_in), dim=1)
         value = self.critic(head_in)
 
         if self.spiking:
-            if self.layer2:
-                return policy, value, lin_act, out1, lin_act
             return policy, value, lin_act, out1
         return policy, value, lin_act
 
-def freeze_rnn_params(net, layer2, freeze_lambda=False, freeze_B=False):
+def freeze_rnn_params(net, freeze_lambda=False, freeze_B=False):
     cells = [("cell1", net.cell1)]
-    if layer2 and getattr(net, "cell2", None) is not None:
-        cells.append(("cell2", net.cell2))
 
     for name, cell in cells:
-        if isinstance(cell, nn.Linear):
-            if freeze_B:
-                cell.weight.requires_grad_(False)
-                if cell.bias is not None:
-                    cell.bias.requires_grad_(False)
-                print(f"Froze input projection for {name} (linear backbone).")
-            if freeze_lambda:
-                print(f"{name} is feedforward: no recurrent weights to freeze.")
-            continue
-
         if freeze_lambda:
             cell.weight_hh.requires_grad_(False)
             if cell.bias_hh is not None:
@@ -171,14 +123,14 @@ def freeze_rnn_params(net, layer2, freeze_lambda=False, freeze_B=False):
 
 if __name__ == "__main__":
     for htype in HIDDEN_TYPES:
-        for spike, layer2 in [(False, False), (True, False), (True, True)]:
+        for spike in [False, True]:
             net = AC_RNN(input_dimensions=3, action_dimensions=3, hidden_dim=8,
-                         hidden_type=htype, spike=spike, layer2=layer2,
+                         hidden_type=htype, spike=spike,
                          p_dropout=0.1)
             net.reinit_hid()
             out = net.forward(torch.zeros(1, 3))
-            expected = 5 if (spike and layer2) else (4 if spike else 3)
-            assert len(out) == expected, (htype, spike, layer2, len(out))
+            expected = 4 if spike else 3
+            assert len(out) == expected, (htype, spike, len(out))
             assert out[0].shape == (1, 3) and out[1].shape == (1, 1)
         print(f"{htype:7s} arity OK")
 
@@ -191,7 +143,7 @@ if __name__ == "__main__":
     net.reinit_hid()
     assert torch.count_nonzero(net.hx[0]) == 0
 
-    freeze_rnn_params(net, layer2=False, freeze_lambda=True, freeze_B=True)
+    freeze_rnn_params(net, freeze_lambda=True, freeze_B=True)
     trainable = {n for n, p in net.named_parameters() if p.requires_grad}
     assert not any(n.startswith("cell1.") for n in trainable), trainable
     assert {"readout.weight", "actor.weight", "critic.weight"} <= trainable

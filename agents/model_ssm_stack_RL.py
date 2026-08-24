@@ -294,22 +294,6 @@ class AC_SSM_stack(nn.Module):
             init_mode=ssm_params.get("init_mode", "hippo"),
             init_perturb_eps=ssm_params.get("init_perturb_eps", 0.1)
         )
-        self.layer2 = ssm_params["layer2"]
-        if self.layer2:
-            self.ssm_cell2 = S5SSMCell(
-                H_in=hidden_dim,
-                H_out=hidden_dim,
-                P=ssm_params.get("P", 16),
-                C_init=ssm_params.get("C_init", "trunc_standard_normal"),
-                discretization=ssm_params.get("discretization", "zoh"),
-                dt_min=ssm_params.get("dt_min", 0.001),
-                dt_max=ssm_params.get("dt_max", 0.1),
-                conj_sym=ssm_params.get("conj_sym", True),
-                step_rescale=ssm_params.get("step_rescale", 1.0),
-                init_mode=ssm_params.get("init_mode", "hippo"),
-                init_perturb_eps=ssm_params.get("init_perturb_eps", 0.1)
-            )
-
         self.actor = nn.Linear(hidden_dim, action_dimensions)
         self.critic = nn.Linear(hidden_dim, 1)
         self.dropout = nn.Dropout(p=p_dropout)
@@ -320,7 +304,6 @@ class AC_SSM_stack(nn.Module):
         if self.spiking:
             print("spiking SSM initialized.")
             self.ste = SpikeSTE.apply
-        self.hidden_state2 = None
 
         self.saved_actions = []
         self.rewards = []
@@ -330,26 +313,17 @@ class AC_SSM_stack(nn.Module):
         ssm_out1, self.hidden_state1 = self.ssm_cell1.step(x, dt, self.hidden_state1, lesion_idx)
         if self.spiking:
             ssm_out1 = self.ste(ssm_out1, self.alpha)
-        if self.layer2:
-            ssm_out2, self.hidden_state2 = self.ssm_cell2.step(ssm_out1, dt, self.hidden_state2, lesion_idx)
-            if self.spiking:
-                ssm_out2 = self.ste(ssm_out2, self.alpha)
-        else:
-            ssm_out2 = ssm_out1
-        lin_act = ssm_out2
-        ssm_out2 = self.dropout(ssm_out2)
+        lin_act = ssm_out1
+        head_in = self.dropout(lin_act)
 
-        policy = F.softmax(self.actor(ssm_out2), dim=1)
-        value = self.critic(ssm_out2)
-        if self. spiking:
-            if self.layer2:
-                return policy, value, lin_act, ssm_out1, lin_act
+        policy = F.softmax(self.actor(head_in), dim=1)
+        value = self.critic(head_in)
+        if self.spiking:
             return policy, value, lin_act, ssm_out1
         return policy, value, lin_act
 
     def reinit_hid(self):
         self.hidden_state1 = None
-        self.hidden_state2 = None
 
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
