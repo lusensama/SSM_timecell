@@ -9,7 +9,7 @@ agents/                      SSM and LSTM actor-critic cores + HiPPO init
 envs/                        int_discrim.py, lap_random.py, lap_landmark.py
 utils/                       utils_analysis.py (sorting/decoding), vp.py (Victor-Purpura)
 models/                      the three released checkpoints -- see models/README.md
-figures/response_selected/   the figures, their CSV/NPZ
+figures/                     the figures, their CSV/NPZ
                              inputs, and the code that rebuilds them
 ```
 
@@ -84,7 +84,7 @@ python eval_lap_counting.py --ckpt models/lap_counting_best.pt \
 `models/` carries the best model of each family, picked by re-evaluating every
 candidate on one common seed rather than trusting the accuracy recorded during
 training. `models/README.md` gives the numbers, the full candidate tables and
-the provenance path for each file.
+the script that produced each file.
 
 ```bash
 python train_and_plot_3stim.py --spike --delay 30 --n_neurons 50 \
@@ -95,11 +95,9 @@ python train_and_plot_3stim.py --spike --delay 30 --n_neurons 50 \
 ### 3) Figures
 
 ```bash
-cd figures/response_selected
+cd figures
 python scripts/make_all.py        # ~20 s, rebuilds all nine figures
 ```
 
-See `figures/response_selected/README.md` for what each figure shows and which
-review point it answers. Its `scripts/provenance/` subfolder is a record of how
-`data/` was extracted from the original run artifacts; those extractors need the
-full `training/` tree and are not required to rebuild any figure.
+See `figures/README.md` for what each figure shows and which
+review point it answers.

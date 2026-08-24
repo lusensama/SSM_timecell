@@ -16,7 +16,7 @@
 *.pyc
 __pycache__/
 .idea/
-figures/response_selected/scripts/__pycache__/
+figures/scripts/__pycache__/
 
 # checkpoints: only the three released models under models/
 !models/*.pt
